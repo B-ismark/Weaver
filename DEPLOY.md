@@ -38,6 +38,7 @@ Project → Settings → Environment Variables (Production). Copy from `.env.loc
 | `SUPABASE_SECRET_KEY` | **secret** — server only |
 | `EMBED_ENDPOINT` | HF Space URL |
 | `EMBED_TOKEN` | HF Space auth |
+| `WEAVER_PASSCODE` | **new** — the access passcode; unset = app is public |
 | `CRON_SECRET` | **new** — generate one (below); guards the cron endpoints |
 | `DISCOVERY_EMBED_CAP` | optional, default 48 (sized for the 60s function limit) |
 | `PINTEREST_ACCESS_TOKEN` | optional — once Pinterest activates the app |

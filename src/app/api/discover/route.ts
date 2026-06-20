@@ -2,8 +2,9 @@ import { runDiscovery } from "@/discovery/refresh";
 import { arenaSource } from "@/discovery/sources/arena";
 import { openverseSource } from "@/discovery/sources/openverse";
 import { redditSource } from "@/discovery/sources/reddit";
-import { requireCronSecret } from "@/lib/cronAuth";
-
+// Auth is enforced in proxy.ts (session cookie, or CRON_SECRET bearer for the
+// scheduled job) — no in-route guard needed.
+//
 // Embedding via the HF Space is slow; ask for the max serverless budget (Vercel
 // Hobby ceiling is 60s — EMBED_CAP is sized to fit).
 export const maxDuration = 60;
@@ -26,9 +27,6 @@ const SOURCES = {
 };
 
 export async function POST(request: Request): Promise<Response> {
-  const denied = requireCronSecret(request);
-  if (denied) return denied;
-
   let names: string[] = ["arena"];
   try {
     const body = (await request.json()) as { source?: string; sources?: string[] };

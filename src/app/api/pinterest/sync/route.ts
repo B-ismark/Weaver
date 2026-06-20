@@ -1,4 +1,3 @@
-import { requireCronSecret } from "@/lib/cronAuth";
 import { fetchSavedPins, isConnected } from "@/lib/pinterest";
 import { embedImages, toPgVector } from "@/lib/embedImage";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -22,10 +21,7 @@ export const maxDuration = 60;
 // Hobby 60s); the daily cron catches up over runs. Tunable via env.
 const CAP = Number(process.env.PINTEREST_SYNC_CAP) || 48;
 
-export async function POST(request: Request): Promise<Response> {
-  const denied = requireCronSecret(request);
-  if (denied) return denied;
-
+export async function POST(): Promise<Response> {
   if (!(await isConnected())) {
     return Response.json(
       { error: "Pinterest not connected — authorize at /api/pinterest/auth" },

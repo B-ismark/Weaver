@@ -55,6 +55,11 @@ export default function PrivacyPage() {
               never sold, shared, published, or shown to anyone else. There is no advertising and no
               third-party analytics or tracking.
             </p>
+            <p className="text-muted">
+              Image embeddings are produced with a pre-trained model for similarity ranking only.
+              Weaver does <strong>not</strong> use Pinterest data — or any data it accesses — to
+              train machine-learning or AI models.
+            </p>
           </section>
 
           <section className="flex flex-col gap-2">
