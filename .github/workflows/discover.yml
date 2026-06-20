@@ -20,13 +20,13 @@ jobs:
       - name: Normalize APP_URL (strip trailing slash)
         run: echo "APP_URL=${APP_URL%/}" >> "$GITHUB_ENV"
 
-      - name: Pull new discovery candidates (Are.na)
+      - name: Pull new discovery candidates (Are.na + Openverse)
         run: |
           # -L follows redirects (308 preserves POST + body); -f fails on >=400.
           curl -fsSL -X POST "$APP_URL/api/discover" \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \
-            -d '{"sources":["arena"]}'
+            -d '{"sources":["arena","openverse"]}'
           echo
 
       - name: Sync Pinterest saved pins (taste signal)

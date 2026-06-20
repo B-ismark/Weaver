@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getItemById, getSimilarItems } from "@/lib/items";
+import { shouldOptimize } from "@/lib/imageHost";
 import { MasonryFeed } from "@/components/MasonryFeed";
 import { SourceOutLink } from "@/components/SourceOutLink";
 import { ItemActions } from "@/components/ItemActions";
@@ -42,6 +43,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
               alt={item.caption || "Image"}
               fill
               sizes="(max-width: 768px) 100vw, 66vw"
+              unoptimized={!shouldOptimize(item.fullUrl)}
               className="object-contain"
               priority
             />

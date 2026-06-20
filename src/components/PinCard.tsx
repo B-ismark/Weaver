@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { FeedItem } from "@/lib/feed";
 import { logEngagement } from "@/lib/engagement";
+import { shouldOptimize } from "@/lib/imageHost";
 import { ItemActions } from "./ItemActions";
 
 /**
@@ -53,6 +54,7 @@ export function PinCard({
             alt={item.caption}
             fill
             priority={priority}
+            unoptimized={!shouldOptimize(item.thumbUrl)}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 220px"
             onLoad={() => setLoaded(true)}
             className={`object-cover transition-opacity duration-300 ${
