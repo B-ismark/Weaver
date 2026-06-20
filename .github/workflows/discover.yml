@@ -17,9 +17,13 @@ jobs:
       APP_URL: ${{ secrets.APP_URL }}
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
     steps:
+      - name: Normalize APP_URL (strip trailing slash)
+        run: echo "APP_URL=${APP_URL%/}" >> "$GITHUB_ENV"
+
       - name: Pull new discovery candidates (Are.na)
         run: |
-          curl -fsS -X POST "$APP_URL/api/discover" \
+          # -L follows redirects (308 preserves POST + body); -f fails on >=400.
+          curl -fsSL -X POST "$APP_URL/api/discover" \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \
             -d '{"sources":["arena"]}'
@@ -27,7 +31,7 @@ jobs:
 
       - name: Sync Pinterest saved pins (taste signal)
         run: |
-          code=$(curl -sS -o /tmp/sync.json -w "%{http_code}" -X POST "$APP_URL/api/pinterest/sync" \
+          code=$(curl -sSL -o /tmp/sync.json -w "%{http_code}" -X POST "$APP_URL/api/pinterest/sync" \
             -H "Authorization: Bearer $CRON_SECRET")
           cat /tmp/sync.json; echo
           # 409 = Pinterest not connected yet → not a failure, just skip.
@@ -37,4 +41,4 @@ jobs:
       - name: Recompute taste centroids
         run: |
           # 422 when there aren't enough taste embeddings yet — tolerate it.
-          curl -sS -X POST "$APP_URL/api/recluster" | cat; echo
+          curl -sSL -X POST "$APP_URL/api/recluster" | cat; echo
