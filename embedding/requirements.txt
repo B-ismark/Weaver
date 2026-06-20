@@ -1,0 +1,8 @@
+# Weaver embedding pipeline (Phase 2). CPU works for small batches; GPU/Colab
+# for larger initial passes (§8.7).
+open_clip_torch>=2.24
+torch>=2.2
+pillow>=10.0
+numpy>=1.26
+scikit-learn>=1.4
+requests>=2.31

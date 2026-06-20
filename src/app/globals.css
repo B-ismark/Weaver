@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --surface: #f4f4f5;
+  --muted: #71717a;
+  --ring: #6366f1;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --surface: #18181b;
+    --muted: #a1a1aa;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* a11y: visible focus for keyboard users on every interactive element. */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* a11y: screen-reader-only utility (skip link, labels). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.sr-only.focusable:focus,
+.sr-only.focusable:focus-visible {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  width: auto;
+  height: auto;
+  padding: 0.5rem 0.75rem;
+  margin: 0;
+  clip: auto;
+  background: var(--foreground);
+  color: var(--background);
+  z-index: 50;
+}
+
+/* efficiency + a11y: honor reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

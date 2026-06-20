@@ -1,0 +1,67 @@
+{
+  "pins": [
+    {
+      "title": "Misty forest ridge",
+      "description": "calm greens",
+      "link": "https://example.com/pin/1",
+      "image_url": "https://picsum.photos/seed/weave-a/800/1000",
+      "created_at": "2026-05-01T10:00:00Z",
+      "board": "landscapes"
+    },
+    {
+      "title": "Brutalist stair",
+      "description": "concrete geometry",
+      "link": "https://example.com/pin/2",
+      "image_url": "https://picsum.photos/seed/weave-b/800/600",
+      "created_at": "2026-05-03T12:30:00Z",
+      "board": "architecture"
+    },
+    {
+      "title": "Ceramic bowls",
+      "description": "earth glaze",
+      "link": "https://example.com/pin/3",
+      "image_url": "https://picsum.photos/seed/weave-c/800/800",
+      "created_at": "2026-05-05T09:15:00Z",
+      "board": "objects"
+    },
+    {
+      "title": "Duplicate of #1 (same image, different pin)",
+      "description": "should collapse via aHash dedup",
+      "link": "https://example.com/pin/4",
+      "image_url": "https://picsum.photos/seed/weave-a/800/1000",
+      "created_at": "2026-05-06T09:15:00Z",
+      "board": "landscapes"
+    },
+    {
+      "title": "Editorial type",
+      "description": "grid study",
+      "link": "https://example.com/pin/5",
+      "image_url": "https://picsum.photos/seed/weave-d/800/1100",
+      "created_at": "2026-05-08T18:40:00Z",
+      "board": "type"
+    },
+    {
+      "title": "Imageless pin (should be skipped)",
+      "description": "no image field present",
+      "link": "https://example.com/pin/6",
+      "created_at": "2026-05-09T11:00:00Z",
+      "board": "misc"
+    },
+    {
+      "title": "Coastal dusk",
+      "description": "long horizon",
+      "link": "https://example.com/pin/7",
+      "image_url": "https://picsum.photos/seed/weave-e/800/520",
+      "created_at": "2026-05-11T20:05:00Z",
+      "board": "landscapes"
+    },
+    {
+      "title": "Film poster mood",
+      "description": "muted palette",
+      "link": "https://example.com/pin/8",
+      "image_url": "https://picsum.photos/seed/weave-f/800/1200",
+      "created_at": "2026-05-13T14:22:00Z",
+      "board": "film"
+    }
+  ]
+}

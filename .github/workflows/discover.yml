@@ -1,0 +1,40 @@
+name: Weaver auto-refresh
+
+# D4 — scheduled discovery + Pinterest taste sync. Hits the deployed app's
+# cron-guarded endpoints. Requires two repo secrets:
+#   APP_URL      e.g. https://weaver.example.com   (no trailing slash)
+#   CRON_SECRET  matches the app's CRON_SECRET env  (Bearer auth)
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # daily 07:00 UTC
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      APP_URL: ${{ secrets.APP_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Pull new discovery candidates (Are.na)
+        run: |
+          curl -fsS -X POST "$APP_URL/api/discover" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"sources":["arena"]}'
+          echo
+
+      - name: Sync Pinterest saved pins (taste signal)
+        run: |
+          code=$(curl -sS -o /tmp/sync.json -w "%{http_code}" -X POST "$APP_URL/api/pinterest/sync" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          cat /tmp/sync.json; echo
+          # 409 = Pinterest not connected yet → not a failure, just skip.
+          if [ "$code" = "409" ]; then echo "Pinterest not connected — skipping"; exit 0; fi
+          if [ "$code" -ge 400 ]; then echo "Pinterest sync failed (HTTP $code)"; exit 1; fi
+
+      - name: Recompute taste centroids
+        run: |
+          # 422 when there aren't enough taste embeddings yet — tolerate it.
+          curl -sS -X POST "$APP_URL/api/recluster" | cat; echo
