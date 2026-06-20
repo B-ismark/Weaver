@@ -2,6 +2,7 @@ import { runDiscovery } from "@/discovery/refresh";
 import { arenaSource } from "@/discovery/sources/arena";
 import { openverseSource } from "@/discovery/sources/openverse";
 import { redditSource } from "@/discovery/sources/reddit";
+import { getServerSupabase } from "@/lib/supabase/server";
 // Auth is enforced in proxy.ts (session cookie, or CRON_SECRET bearer for the
 // scheduled job) — no in-route guard needed.
 //
@@ -49,10 +50,22 @@ export async function POST(request: Request): Promise<Response> {
     for (const n of names) {
       reports.push(await runDiscovery(SOURCES[n as keyof typeof SOURCES]));
     }
+
+    // Content-based de-dup pass (migration 0009): collapses the same image that
+    // arrived under different URLs. Non-fatal — if the RPC isn't applied yet,
+    // discovery still succeeds.
+    let deduped: number | null = null;
+    try {
+      const { data, error } = await getServerSupabase().rpc("dedup_candidates");
+      if (!error && typeof data === "number") deduped = data;
+    } catch {
+      // RPC missing or failed → skip silently
+    }
+
     // single-source call keeps the old flat shape; multi-source returns an array.
     return reports.length === 1
-      ? Response.json({ ok: true, ...reports[0] })
-      : Response.json({ ok: true, reports });
+      ? Response.json({ ok: true, ...reports[0], deduped })
+      : Response.json({ ok: true, reports, deduped });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Discovery failed";
     return Response.json({ error: message }, { status: 500 });
