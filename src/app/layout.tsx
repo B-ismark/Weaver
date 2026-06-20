@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
@@ -36,6 +37,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </a>
         <WebBackgroundLab />
         {children}
+        <footer className="mt-auto border-t border-surface px-4 py-4 text-center text-xs text-muted">
+          <Link href="/privacy" className="hover:text-foreground">
+            Privacy Policy
+          </Link>
+        </footer>
         <ServiceWorkerRegistrar />
       </body>
     </html>
