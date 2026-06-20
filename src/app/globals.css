@@ -67,6 +67,22 @@ body {
   z-index: 50;
 }
 
+/* Springy "appear" for the share→copied check (ItemActions). Neutralized by
+   the reduced-motion override below. */
+@keyframes weave-draw {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.2);
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 /* efficiency + a11y: honor reduced-motion preference. */
 @media (prefers-reduced-motion: reduce) {
   *,

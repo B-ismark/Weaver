@@ -1,16 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { logEngagement } from "@/lib/engagement";
 
 /**
- * Save / Hide / Share actions for a feed item (Pinterest-style). Used as a tile
- * overlay and on the detail view. Optimistic: on save/hide it calls onResolved
- * so the parent can drop the tile from the feed.
+ * Save / Not-interested / Share for a feed item, with weave-themed
+ * micro-interactions (orb-weaver motif):
+ *   - Save  → heart springs + fills gold (the web-hub colour) and silk threads
+ *             radiate out, like a fresh capture. Promotes to taste (positive).
+ *   - Hide  → scissors snip the thread (shake + sever). "Not my taste" (negative).
+ *   - Share → arrow glides; on copy, a check strokes itself in. Web Share API,
+ *             falling back to copy-link.
  *
- * - Save  → promote to taste (positive). - Hide → "not my taste" (negative).
- * - Share → Web Share API, falling back to copy-link.
- * Accessible: real buttons with aria-labels, keyboard-focusable.
+ * Built on the Web Animations API (no animation lib). Accessibility first:
+ * real buttons, aria-labels, aria-pressed, focus-visible rings, and ALL motion
+ * is gated on prefers-reduced-motion (research: motion must be optional, with a
+ * non-motion fallback — here the colour/state change still happens).
+ * Micro-timings sit in the 120–220ms sweet spot; the save burst is ~420ms.
  */
 async function signal(itemId: string, action: "save" | "hide") {
   await fetch("/api/signal", {
@@ -18,6 +24,68 @@ async function signal(itemId: string, action: "save" | "hide") {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ itemId, action }),
   });
+}
+
+const SPRING = "cubic-bezier(0.34, 1.56, 0.64, 1)"; // overshoot → springy pop
+
+function reduceMotion() {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  );
+}
+function haptic(pattern: number | number[]) {
+  if (typeof navigator !== "undefined") navigator.vibrate?.(pattern);
+}
+
+/** Springy press-pop on the icon. */
+function pop(el: Element | null) {
+  if (!el || reduceMotion()) return;
+  el.animate(
+    [{ transform: "scale(1)" }, { transform: "scale(1.35)" }, { transform: "scale(1)" }],
+    { duration: 360, easing: SPRING }
+  );
+}
+
+/** Silk threads radiating from a button — the "capture" burst on save. */
+function silkBurst(host: HTMLElement | null) {
+  if (!host || reduceMotion()) return;
+  const N = 9;
+  const rect = host.getBoundingClientRect();
+  const cx = rect.width / 2;
+  const cy = rect.height / 2;
+  for (let i = 0; i < N; i++) {
+    const ang = (i / N) * Math.PI * 2 + (Math.PI / N) * 0.5;
+    const strand = document.createElement("span");
+    strand.style.cssText = `position:absolute;left:${cx}px;top:${cy}px;width:2px;height:2px;border-radius:1px;background:#c9a227;pointer-events:none;transform-origin:center;will-change:transform,opacity;`;
+    host.appendChild(strand);
+    const dist = 16 + Math.random() * 8;
+    strand.animate(
+      [
+        { transform: `rotate(${ang}rad) scaleY(1) translateY(0)`, opacity: 0.95 },
+        {
+          transform: `rotate(${ang}rad) scaleY(9) translateY(-${dist}px)`,
+          opacity: 0,
+        },
+      ],
+      { duration: 420, easing: "cubic-bezier(0.22, 0.61, 0.36, 1)" }
+    ).onfinish = () => strand.remove();
+  }
+}
+
+/** Quick lateral shake — the thread being snipped. */
+function snip(el: Element | null) {
+  if (!el || reduceMotion()) return;
+  el.animate(
+    [
+      { transform: "translateX(0) rotate(0)" },
+      { transform: "translateX(-2px) rotate(-12deg)" },
+      { transform: "translateX(2px) rotate(10deg)" },
+      { transform: "translateX(-1px) rotate(-4deg)" },
+      { transform: "translateX(0) rotate(0)" },
+    ],
+    { duration: 300, easing: "ease-in-out" }
+  );
 }
 
 export function ItemActions({
@@ -34,54 +102,163 @@ export function ItemActions({
   onResolved?: (id: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [acted, setActed] = useState<"" | "saved" | "hidden">("");
   const [shared, setShared] = useState<"" | "copied">("");
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const hideRef = useRef<HTMLButtonElement>(null);
+  const saveIcon = useRef<SVGSVGElement>(null);
+  const hideIcon = useRef<SVGSVGElement>(null);
 
-  async function onSave() {
-    if (busy) return;
-    setBusy(true);
-    logEngagement(itemId, "save");
-    await signal(itemId, "save").catch(() => {});
-    onResolved?.(itemId);
+  // Let the burst play before the parent collapses the tile.
+  function resolveAfter(ms: number) {
+    const d = reduceMotion() ? 0 : ms;
+    if (d === 0) onResolved?.(itemId);
+    else setTimeout(() => onResolved?.(itemId), d);
   }
-  async function onHide() {
+
+  function onSave() {
     if (busy) return;
     setBusy(true);
+    setActed("saved");
+    pop(saveIcon.current);
+    silkBurst(saveRef.current);
+    haptic(18);
+    logEngagement(itemId, "save");
+    signal(itemId, "save").catch(() => {});
+    resolveAfter(440);
+  }
+  function onHide() {
+    if (busy) return;
+    setBusy(true);
+    setActed("hidden");
+    snip(hideIcon.current);
+    haptic([8, 30, 8]);
     logEngagement(itemId, "dismiss");
-    await signal(itemId, "hide").catch(() => {});
-    onResolved?.(itemId);
+    signal(itemId, "hide").catch(() => {});
+    resolveAfter(340);
   }
   async function onShare() {
     const data = { title: caption || "Weaver", url: sourceLink };
+    haptic(10);
     if (navigator.share) {
       navigator.share(data).catch(() => {});
     } else {
       await navigator.clipboard?.writeText(sourceLink).catch(() => {});
       setShared("copied");
-      setTimeout(() => setShared(""), 1500);
+      setTimeout(() => setShared(""), 1600);
     }
   }
 
+  const isBar = variant === "bar";
   const base =
-    variant === "overlay"
-      ? "rounded-full bg-background/85 p-2 text-foreground shadow-sm backdrop-blur hover:bg-background"
-      : "rounded-full border border-surface bg-surface px-3 py-2 text-sm hover:bg-background";
+    "relative flex items-center justify-center gap-1.5 rounded-full transition-[transform,background-color,color] duration-150 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c9a227]/70 disabled:cursor-default " +
+    (isBar
+      ? "border border-surface bg-surface px-3 py-2 text-sm hover:bg-background"
+      : "bg-background/85 p-2 text-foreground shadow-sm backdrop-blur hover:bg-background hover:-translate-y-0.5");
+
+  const sz = isBar ? 16 : 18;
 
   return (
-    <div
-      className={
-        variant === "overlay"
-          ? "flex gap-1.5"
-          : "flex flex-wrap gap-2"
-      }
-    >
-      <button type="button" onClick={onSave} disabled={busy} aria-label="Save — more like this" className={base} title="Save">
-        {variant === "bar" ? "♥ Save" : "♥"}
+    <div className={isBar ? "flex flex-wrap gap-2" : "flex gap-1.5"}>
+      {/* Save */}
+      <button
+        ref={saveRef}
+        type="button"
+        onClick={onSave}
+        disabled={busy}
+        aria-label="Save — more like this"
+        aria-pressed={acted === "saved"}
+        title="Save"
+        className={`${base} overflow-visible ${acted === "saved" ? "text-[#c9a227]" : ""}`}
+      >
+        <svg
+          ref={saveIcon}
+          width={sz}
+          height={sz}
+          viewBox="0 0 24 24"
+          fill={acted === "saved" ? "#c9a227" : "none"}
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
+        </svg>
+        {isBar && (acted === "saved" ? "Saved" : "Save")}
       </button>
-      <button type="button" onClick={onHide} disabled={busy} aria-label="Hide — not my taste" className={base} title="Not my taste">
-        {variant === "bar" ? "⊘ Not my taste" : "⊘"}
+
+      {/* Not my taste — snip the thread */}
+      <button
+        ref={hideRef}
+        type="button"
+        onClick={onHide}
+        disabled={busy}
+        aria-label="Not my taste — show less like this"
+        title="Not my taste"
+        className={`${base} ${acted === "hidden" ? "text-red-400" : ""}`}
+      >
+        <svg
+          ref={hideIcon}
+          width={sz}
+          height={sz}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="6" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <line x1="20" y1="4" x2="8.12" y2="15.88" />
+          <line x1="14.47" y1="14.48" x2="20" y2="20" />
+          <line x1="8.12" y1="8.12" x2="12" y2="12" />
+        </svg>
+        {isBar && "Not my taste"}
       </button>
-      <button type="button" onClick={onShare} aria-label="Share" className={base} title="Share">
-        {variant === "bar" ? (shared === "copied" ? "✓ Link copied" : "↗ Share") : "↗"}
+
+      {/* Share */}
+      <button
+        type="button"
+        onClick={onShare}
+        aria-label={shared === "copied" ? "Link copied" : "Share"}
+        title="Share"
+        className={`${base} ${shared === "copied" ? "text-[#c9a227]" : ""}`}
+      >
+        {shared === "copied" ? (
+          <svg
+            width={sz}
+            height={sz}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            style={reduceMotion() ? undefined : { animation: "weave-draw 320ms ease-out" }}
+          >
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        ) : (
+          <svg
+            width={sz}
+            height={sz}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M7 17 17 7" />
+            <path d="M8 7h9v9" />
+          </svg>
+        )}
+        {isBar && (shared === "copied" ? "Link copied" : "Share")}
       </button>
     </div>
   );
