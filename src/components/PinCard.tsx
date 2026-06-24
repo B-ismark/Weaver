@@ -49,6 +49,13 @@ export function PinCard({
         aria-label={`${item.caption || "Untitled"} — from ${item.platform}`}
       >
         <div className="relative w-full" style={{ aspectRatio: `${item.width} / ${item.height}` }}>
+          {/* Shimmer skeleton until the thumb decodes — no blank flash. */}
+          <div
+            aria-hidden="true"
+            className={`skeleton absolute inset-0 transition-opacity duration-500 ${
+              loaded ? "opacity-0" : "opacity-100"
+            }`}
+          />
           <Image
             src={item.thumbUrl}
             alt={item.caption}
@@ -57,8 +64,8 @@ export function PinCard({
             unoptimized={!shouldOptimize(item.thumbUrl)}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 220px"
             onLoad={() => setLoaded(true)}
-            className={`object-cover transition-opacity duration-300 ${
-              loaded ? "opacity-100" : "opacity-0"
+            className={`object-cover transition-[opacity,transform] duration-500 ${
+              loaded ? "scale-100 opacity-100" : "scale-105 opacity-0"
             }`}
           />
         </div>

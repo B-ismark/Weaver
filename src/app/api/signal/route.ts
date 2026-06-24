@@ -6,12 +6,14 @@ import { parsePgVector } from "@/lib/kmeans";
  *   - "save"   : strong positive. Promote candidate → taste set AND nudge the
  *                nearest taste centroid toward it, so the feed sharpens
  *                immediately (full re-cluster via /api/recluster).
+ *   - "unsave" : reverse a save. Demote taste → candidate (centroid drift is
+ *                corrected by the next full re-cluster).
  *   - "hide"   : negative ("not my taste"). Excluded from the feed.
  *   - "unhide" : reverse a hide.
  *
  * Also logs an engagement event for the (parked) learned ranker.
  */
-type Action = "save" | "hide" | "unhide";
+type Action = "save" | "unsave" | "hide" | "unhide";
 
 /**
  * Move the nearest centroid a step toward a newly-saved embedding (running mean
@@ -69,11 +71,13 @@ export async function POST(request: Request): Promise<Response> {
   const patch =
     action === "save"
       ? { role: "taste", promoted: true, hidden: false }
-      : action === "hide"
-        ? { hidden: true }
-        : action === "unhide"
-          ? { hidden: false }
-          : null;
+      : action === "unsave"
+        ? { role: "candidate", promoted: false }
+        : action === "hide"
+          ? { hidden: true }
+          : action === "unhide"
+            ? { hidden: false }
+            : null;
   if (!patch) return Response.json({ error: `unknown action ${action}` }, { status: 422 });
 
   const { error } = await supabase.from("items").update(patch).eq("id", itemId);

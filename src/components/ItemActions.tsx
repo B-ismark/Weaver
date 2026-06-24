@@ -18,7 +18,7 @@ import { logEngagement } from "@/lib/engagement";
  * non-motion fallback — here the colour/state change still happens).
  * Micro-timings sit in the 120–220ms sweet spot; the save burst is ~420ms.
  */
-async function signal(itemId: string, action: "save" | "hide") {
+async function signal(itemId: string, action: "save" | "unsave" | "hide") {
   await fetch("/api/signal", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -101,41 +101,44 @@ export function ItemActions({
   variant?: "overlay" | "bar";
   onResolved?: (id: string) => void;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [acted, setActed] = useState<"" | "saved" | "hidden">("");
+  const [liked, setLiked] = useState(false);
+  const [hiding, setHiding] = useState(false);
   const [shared, setShared] = useState<"" | "copied">("");
   const saveRef = useRef<HTMLButtonElement>(null);
   const hideRef = useRef<HTMLButtonElement>(null);
   const saveIcon = useRef<SVGSVGElement>(null);
   const hideIcon = useRef<SVGSVGElement>(null);
 
-  // Let the burst play before the parent collapses the tile.
-  function resolveAfter(ms: number) {
-    const d = reduceMotion() ? 0 : ms;
-    if (d === 0) onResolved?.(itemId);
-    else setTimeout(() => onResolved?.(itemId), d);
+  // Like is a TOGGLE and does NOT remove the tile — so you can unlike, and
+  // search results don't vanish when you like them. (Liked candidates leave the
+  // home feed naturally on the next refresh via the "already seen" exclusion.)
+  function onToggleLike() {
+    if (hiding) return;
+    const next = !liked;
+    setLiked(next);
+    pop(saveIcon.current);
+    if (next) {
+      silkBurst(saveRef.current);
+      haptic(18);
+      logEngagement(itemId, "save");
+      signal(itemId, "save").catch(() => {});
+    } else {
+      haptic(8);
+      signal(itemId, "unsave").catch(() => {});
+    }
   }
 
-  function onSave() {
-    if (busy) return;
-    setBusy(true);
-    setActed("saved");
-    pop(saveIcon.current);
-    silkBurst(saveRef.current);
-    haptic(18);
-    logEngagement(itemId, "save");
-    signal(itemId, "save").catch(() => {});
-    resolveAfter(440);
-  }
+  // Hide IS terminal — collapse the tile (after the snip plays).
   function onHide() {
-    if (busy) return;
-    setBusy(true);
-    setActed("hidden");
+    if (hiding) return;
+    setHiding(true);
     snip(hideIcon.current);
     haptic([8, 30, 8]);
     logEngagement(itemId, "dismiss");
     signal(itemId, "hide").catch(() => {});
-    resolveAfter(340);
+    const d = reduceMotion() ? 0 : 340;
+    if (d === 0) onResolved?.(itemId);
+    else setTimeout(() => onResolved?.(itemId), d);
   }
   async function onShare() {
     const data = { title: caption || "Weaver", url: sourceLink };
@@ -160,23 +163,23 @@ export function ItemActions({
 
   return (
     <div className={isBar ? "flex flex-wrap gap-2" : "flex gap-1.5"}>
-      {/* Save */}
+      {/* Like (toggle) */}
       <button
         ref={saveRef}
         type="button"
-        onClick={onSave}
-        disabled={busy}
-        aria-label="Save — more like this"
-        aria-pressed={acted === "saved"}
-        title="Save"
-        className={`${base} overflow-visible ${acted === "saved" ? "text-[#c9a227]" : ""}`}
+        onClick={onToggleLike}
+        disabled={hiding}
+        aria-label={liked ? "Unlike" : "Like — more like this"}
+        aria-pressed={liked}
+        title={liked ? "Unlike" : "Like"}
+        className={`${base} overflow-visible ${liked ? "text-[#c9a227]" : ""}`}
       >
         <svg
           ref={saveIcon}
           width={sz}
           height={sz}
           viewBox="0 0 24 24"
-          fill={acted === "saved" ? "#c9a227" : "none"}
+          fill={liked ? "#c9a227" : "none"}
           stroke="currentColor"
           strokeWidth="2"
           strokeLinecap="round"
@@ -185,7 +188,7 @@ export function ItemActions({
         >
           <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
         </svg>
-        {isBar && (acted === "saved" ? "Saved" : "Save")}
+        {isBar && (liked ? "Liked" : "Like")}
       </button>
 
       {/* Not my taste — snip the thread */}
@@ -193,10 +196,10 @@ export function ItemActions({
         ref={hideRef}
         type="button"
         onClick={onHide}
-        disabled={busy}
+        disabled={hiding}
         aria-label="Not my taste — show less like this"
         title="Not my taste"
-        className={`${base} ${acted === "hidden" ? "text-red-400" : ""}`}
+        className={base}
       >
         <svg
           ref={hideIcon}

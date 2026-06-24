@@ -83,6 +83,27 @@ body {
   }
 }
 
+/* Shimmer for skeleton loaders (cards + search). Frozen under reduced-motion
+   by the override below → degrades to a flat surface tint. */
+@keyframes weave-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+.skeleton {
+  background-image: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    color-mix(in oklab, var(--surface) 55%, var(--muted)) 37%,
+    var(--surface) 63%
+  );
+  background-size: 200% 100%;
+  animation: weave-shimmer 1.5s ease-in-out infinite;
+}
+
 /* efficiency + a11y: honor reduced-motion preference. */
 @media (prefers-reduced-motion: reduce) {
   *,
