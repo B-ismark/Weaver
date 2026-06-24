@@ -2,14 +2,16 @@ import "server-only";
 import type { CandidateItem, CandidateSource } from "../types";
 
 /**
- * Reddit discovery source (free, no auth). Pulls image posts from a set of
- * visually-oriented subreddits via the public `.json` endpoints.
+ * Reddit discovery source via application-only OAuth (free).
  *
- * Subreddits chosen to echo the user's Pinterest boards (Photography, Art,
- * Architecture). Seed-guided selection (§5.2) can replace this fixed list later.
+ * Reddit walled the unauthenticated `.json` endpoints (403 from servers), so we
+ * authenticate app-only: POST client_credentials with the app's Basic auth to
+ * get a bearer token, then read listings from oauth.reddit.com. Create a "web
+ * app" at reddit.com/prefs/apps and set:
+ *   REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET
+ * Without them this source yields nothing (harmless — other sources still run).
  *
- * Respects Reddit etiquette: descriptive User-Agent, modest limits. Hotlinks
- * the preview image (i.redd.it / preview.redd.it) — candidates aren't cached.
+ * Image posts only; hotlinks the preview (i.redd.it / preview.redd.it).
  */
 const SUBREDDITS = [
   "photographs",
@@ -22,7 +24,32 @@ const SUBREDDITS = [
   "CozyPlaces",
 ];
 const PER_SUB = 25;
-const UA = "web:weaver-personal-aggregator:v0.1 (by /u/weaver)";
+const UA = "web:weaver-personal-aggregator:v0.2 (discovery)";
+
+let cachedToken: { token: string; exp: number } | null = null;
+
+async function getToken(now: number): Promise<string | null> {
+  const id = process.env.REDDIT_CLIENT_ID;
+  const secret = process.env.REDDIT_CLIENT_SECRET;
+  if (!id || !secret) return null;
+  if (cachedToken && cachedToken.exp > now + 30_000) return cachedToken.token;
+
+  const res = await fetch("https://www.reddit.com/api/v1/access_token", {
+    method: "POST",
+    headers: {
+      Authorization: "Basic " + Buffer.from(`${id}:${secret}`).toString("base64"),
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": UA,
+    },
+    body: "grant_type=client_credentials",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) return null;
+  const j = (await res.json()) as { access_token?: string; expires_in?: number };
+  if (!j.access_token) return null;
+  cachedToken = { token: j.access_token, exp: now + (j.expires_in ?? 3600) * 1000 };
+  return j.access_token;
+}
 
 type RedditChild = {
   data: {
@@ -31,11 +58,7 @@ type RedditChild = {
     over_18: boolean;
     is_video: boolean;
     is_gallery?: boolean;
-    post_hint?: string;
-    url_overridden_by_dest?: string;
-    preview?: {
-      images: { source: { url: string; width: number; height: number } }[];
-    };
+    preview?: { images: { source: { url: string; width: number; height: number } }[] };
   };
 };
 
@@ -43,9 +66,9 @@ function decode(s: string): string {
   return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'");
 }
 
-async function pullSubreddit(sub: string): Promise<CandidateItem[]> {
-  const res = await fetch(`https://www.reddit.com/r/${sub}/hot.json?limit=${PER_SUB}`, {
-    headers: { "User-Agent": UA },
+async function pullSubreddit(sub: string, token: string): Promise<CandidateItem[]> {
+  const res = await fetch(`https://oauth.reddit.com/r/${sub}/hot?limit=${PER_SUB}&raw_json=1`, {
+    headers: { Authorization: `Bearer ${token}`, "User-Agent": UA },
     signal: AbortSignal.timeout(20_000),
   });
   if (!res.ok) return [];
@@ -57,7 +80,6 @@ async function pullSubreddit(sub: string): Promise<CandidateItem[]> {
     const preview = p.preview?.images?.[0]?.source;
     if (!preview) continue;
     const url = decode(preview.url);
-    // Only real raster images.
     if (!/\.(jpg|jpeg|png|webp)/i.test(url)) continue;
 
     out.push({
@@ -75,8 +97,10 @@ async function pullSubreddit(sub: string): Promise<CandidateItem[]> {
 export const redditSource: CandidateSource = {
   name: "reddit",
   async pull(): Promise<CandidateItem[]> {
+    const token = await getToken(Date.now());
+    if (!token) return []; // creds unset or auth failed → yield nothing
     const batches = await Promise.all(
-      SUBREDDITS.map((s) => pullSubreddit(s).catch(() => [] as CandidateItem[]))
+      SUBREDDITS.map((s) => pullSubreddit(s, token).catch(() => [] as CandidateItem[]))
     );
     return batches.flat();
   },

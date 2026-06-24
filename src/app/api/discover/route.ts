@@ -2,6 +2,7 @@ import { runDiscovery } from "@/discovery/refresh";
 import { arenaSource } from "@/discovery/sources/arena";
 import { openverseSource } from "@/discovery/sources/openverse";
 import { redditSource } from "@/discovery/sources/reddit";
+import { artstationSource } from "@/discovery/sources/artstation";
 import { getServerSupabase } from "@/lib/supabase/server";
 // Auth is enforced in proxy.ts (session cookie, or CRON_SECRET bearer for the
 // scheduled job) — no in-route guard needed.
@@ -25,6 +26,7 @@ const SOURCES = {
   arena: arenaSource,
   openverse: openverseSource,
   reddit: redditSource,
+  artstation: artstationSource,
 };
 
 export async function POST(request: Request): Promise<Response> {
