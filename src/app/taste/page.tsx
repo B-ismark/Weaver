@@ -22,7 +22,7 @@ export default function TastePage() {
         </h1>
         <p className="mb-6 max-w-prose text-sm text-muted">
           Weaver learns from what you&apos;ve imported, but you can steer it directly. Add concepts
-          you want <em>more</em> of, or mute what you want <em>less</em> of — each one nudges the
+          you want <em>more</em> of, or mute what you want <em>less</em> of. Each one nudges the
           discovery feed.
         </p>
         <TasteManager />

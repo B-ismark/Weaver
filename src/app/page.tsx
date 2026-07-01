@@ -27,16 +27,10 @@ export default async function HomePage() {
       </SiteHeader>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">
-        {/* Editorial lede — sets the "curated for you" tone, not a pinboard. */}
-        <Reveal className="mb-8 flex items-end justify-between gap-4">
-          <div>
-            <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-              Woven for you
-            </h1>
-            <p className="mt-1 text-sm text-muted">
-              New images spun from your taste — nothing you&apos;ve already seen.
-            </p>
-          </div>
+        <Reveal className="mb-8">
+          <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+            Woven for you
+          </h1>
         </Reveal>
 
         {items.length === 0 ? (

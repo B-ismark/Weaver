@@ -36,14 +36,14 @@ export default async function SearchPage({
 
         {term && !vector && (
           <p className="text-sm text-muted">
-            Search isn&apos;t available — the embedding endpoint isn&apos;t configured (set
+            Search isn&apos;t available. The embedding endpoint isn&apos;t configured (set
             <code className="mx-1">EMBED_ENDPOINT</code>) or it timed out.
           </p>
         )}
 
         {term && vector && results.length === 0 && (
           <p className="text-sm text-muted">
-            No matches for “{term}”. (Images need embeddings — run the embedding script.)
+            No matches for “{term}”. (Images need embeddings; run the embedding script.)
           </p>
         )}
 

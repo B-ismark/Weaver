@@ -35,7 +35,7 @@ export default function PrivacyPage() {
             <ul className="list-disc space-y-1 pl-5 text-muted">
               <li>
                 With your explicit authorization, Weaver reads <strong>your own</strong> Pinterest
-                boards and pins (scopes <code>boards:read</code>, <code>pins:read</code>) — read-only.
+                boards and pins (scopes <code>boards:read</code>, <code>pins:read</code>), read-only.
                 It never creates, edits, or deletes anything on Pinterest.
               </li>
               <li>
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
             </p>
             <p className="text-muted">
               Image embeddings are produced with a pre-trained model for similarity ranking only.
-              Weaver does <strong>not</strong> use Pinterest data — or any data it accesses — to
+              Weaver does <strong>not</strong> use Pinterest data, or any data it accesses, to
               train machine-learning or AI models.
             </p>
           </section>
@@ -66,9 +66,9 @@ export default function PrivacyPage() {
               Data is stored and processed only by the infrastructure running Weaver:
             </p>
             <ul className="list-disc space-y-1 pl-5 text-muted">
-              <li>Supabase — database and image storage</li>
-              <li>Vercel — application hosting</li>
-              <li>A private Hugging Face Space — computes image embeddings</li>
+              <li>Supabase: database and image storage</li>
+              <li>Vercel: application hosting</li>
+              <li>A private Hugging Face Space: computes image embeddings</li>
             </ul>
           </section>
 

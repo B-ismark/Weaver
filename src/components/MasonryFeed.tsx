@@ -30,7 +30,11 @@ import { useColumnCount } from "./useColumnCount";
  * The native CSS Grid masonry ("grid lanes") will replace this measure-and-span
  * dance once it ships across engines (~late 2026); the markup is already ready.
  */
-const ROW_PX = 8;
+// 1px auto-rows (with zero row-gap) give the span near-pixel granularity, so a
+// tile's allocated height matches its real height and the waterfall doesn't leave
+// ragged vertical gaps. The visual gap between stacked tiles is folded INTO the
+// span (+GAP_PX rows) rather than coming from a coarse grid row-gap.
+const ROW_PX = 1;
 const GAP_PX = 16;
 
 // useLayoutEffect warns during SSR; fall back to useEffect on the server.
@@ -61,7 +65,8 @@ function MasonryCell({
     if (!el) return;
     const measure = () => {
       const h = el.getBoundingClientRect().height;
-      setSpan(Math.max(1, Math.ceil((h + GAP_PX) / (ROW_PX + GAP_PX))));
+      // rows to cover the tile (1px each) + GAP_PX rows for the gap beneath it.
+      setSpan(Math.max(1, Math.ceil(h) + GAP_PX));
     };
     measure();
     // A feature tile spans 2 columns → it gets WIDER, so its measured height
@@ -138,9 +143,10 @@ export function MasonryFeed({
         style={{
           gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
           gridAutoRows: `${ROW_PX}px`,
-          // Both row + column gap: the span formula assumes a row gap of GAP_PX,
-          // so each cell's allocated height ≈ span × (ROW_PX + GAP_PX).
-          gap: `${GAP_PX}px`,
+          // Zero row-gap (the vertical gap is baked into each cell's span);
+          // real gap only between columns.
+          rowGap: 0,
+          columnGap: `${GAP_PX}px`,
         }}
       >
         {ready &&

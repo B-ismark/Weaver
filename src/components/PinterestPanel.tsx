@@ -49,7 +49,7 @@ export function PinterestPanel({
       // New taste signal → refresh centroids so the feed actually shifts.
       if (data.ok && data.stored) await fetch("/api/recluster", { method: "POST" });
     } catch {
-      setResult({ error: "Network error — is the dev server running?" });
+      setResult({ error: "Network error. Is the dev server running?" });
     } finally {
       setBusy(false);
     }
@@ -61,7 +61,7 @@ export function PinterestPanel({
         <div>
           <h2 className="text-sm font-semibold">Pinterest auto-sync</h2>
           <p className="text-xs text-muted">
-            Pull your saved pins automatically as taste signal — no manual export.
+            Pull your saved pins automatically as taste signal. No manual export.
           </p>
         </div>
         <span

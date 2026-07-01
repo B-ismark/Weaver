@@ -17,7 +17,7 @@ const fraunces = Fraunces({ variable: "--font-display", subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Weaver",
   description:
-    "Your visual taste, woven together — a personal aggregator of images you've engaged with across your accounts.",
+    "Your visual taste, woven together: a personal aggregator of images you've engaged with across your accounts.",
   applicationName: "Weaver",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Weaver" },
 };

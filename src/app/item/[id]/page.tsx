@@ -8,6 +8,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { PrimaryNav } from "@/components/PrimaryNav";
 import { SourceOutLink } from "@/components/SourceOutLink";
 import { ItemActions } from "@/components/ItemActions";
+import { BackButton } from "@/components/BackButton";
 import { Reveal } from "@/components/motion/Reveal";
 
 export const dynamic = "force-dynamic";
@@ -25,9 +26,8 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <SiteHeader maxWidth="max-w-5xl">
+      <SiteHeader maxWidth="max-w-5xl" leading={<BackButton />}>
         <PrimaryNav />
-        <span className="text-xs uppercase tracking-wide text-muted">{item.platform}</span>
       </SiteHeader>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">

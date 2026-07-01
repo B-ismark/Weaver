@@ -42,17 +42,17 @@ export function SilkMotes() {
       detectRetina: true,
       fpsLimit: 60,
       particles: {
-        number: { value: 26 },
+        number: { value: 34 },
         color: { value: "#c9a227" }, // web-hub gold
         shape: { type: "circle" },
-        size: { value: { min: 0.6, max: 2.4 } },
+        size: { value: { min: 1, max: 3 } },
         opacity: {
-          value: { min: 0.08, max: 0.34 },
-          animation: { enable: true, speed: 0.4, sync: false },
+          value: { min: 0.2, max: 0.6 },
+          animation: { enable: true, speed: 0.5, sync: false },
         },
         move: {
           enable: true,
-          speed: 0.3,
+          speed: 0.35,
           direction: "none",
           random: true,
           straight: false,
@@ -61,8 +61,8 @@ export function SilkMotes() {
         links: {
           enable: true,
           color: "#c9a227",
-          distance: 150,
-          opacity: 0.07,
+          distance: 160,
+          opacity: 0.14,
           width: 1,
         },
       },

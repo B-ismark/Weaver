@@ -37,7 +37,7 @@ export function ImportForm() {
       // (was only done after Pinterest sync; manual imports left the feed stale).
       if (data.ok && data.stored) await fetch("/api/recluster", { method: "POST" });
     } catch {
-      setResult({ error: "Network error — is the dev server running?" });
+      setResult({ error: "Network error. Is the dev server running?" });
     } finally {
       setBusy(false);
     }

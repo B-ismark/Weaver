@@ -31,7 +31,7 @@ export function LoginForm() {
         setBusy(false);
       }
     } catch {
-      setError("Network error — try again.");
+      setError("Network error. Try again.");
       setBusy(false);
     }
   }

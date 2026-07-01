@@ -27,7 +27,7 @@ export default async function LibraryPage() {
           </h1>
           <p className="mt-1 text-sm text-muted">
             {items.length === 0
-              ? "The threads that shape your taste — imported saves and anything you keep."
+              ? "The threads that shape your taste: imported saves and anything you keep."
               : `${items.length} item${items.length === 1 ? "" : "s"} shaping your taste.`}
           </p>
         </div>

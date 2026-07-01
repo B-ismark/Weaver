@@ -169,7 +169,7 @@ export function ItemActions({
         type="button"
         onClick={onToggleLike}
         disabled={hiding}
-        aria-label={liked ? "Unlike" : "Like — more like this"}
+        aria-label={liked ? "Unlike" : "Like, more like this"}
         aria-pressed={liked}
         title={liked ? "Unlike" : "Like"}
         className={`${base} overflow-visible ${liked ? "text-[#c9a227]" : ""}`}
@@ -197,7 +197,7 @@ export function ItemActions({
         type="button"
         onClick={onHide}
         disabled={hiding}
-        aria-label="Not my taste — show less like this"
+        aria-label="Not my taste, show less like this"
         title="Not my taste"
         className={base}
       >

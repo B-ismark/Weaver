@@ -33,7 +33,7 @@ export function SearchBar({ initial = "" }: { initial?: string }) {
         type="search"
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Search — e.g. minimalist photography"
+        placeholder="Search, e.g. minimalist photography"
         className="w-full rounded-full border border-surface bg-surface px-4 py-2 pr-10 text-sm outline-none focus-visible:border-ring"
       />
       {pending && (

@@ -35,15 +35,6 @@ export function PinCard({
 }) {
   const [loaded, setLoaded] = useState(false);
 
-  // Map the raw cosine taste score to a 0–100% strength. Measured live feed
-  // distribution sits in ~[0.30, 0.70] (p10 .40 / p50 .55 / p90 .64), so stretch
-  // that band across the bar for readable spread instead of everything pinned at
-  // 100%. Null (no bar) when the RPC didn't supply a score.
-  const matchPct =
-    typeof item.score === "number"
-      ? Math.round(Math.min(1, Math.max(0, (item.score - 0.3) / 0.4)) * 100)
-      : null;
-
   return (
     <article className="group relative overflow-hidden rounded-lg">
       {/* Actions overlay — visible on hover, and whenever focused (keyboard). */}
@@ -62,7 +53,7 @@ export function PinCard({
         href={`/item/${item.id}`}
         onClick={() => logEngagement(item.id, "click")}
         className="block focus-visible:outline-none"
-        aria-label={`${item.caption || "Untitled"} — from ${item.platform}`}
+        aria-label={item.caption || "Untitled image"}
       >
         <div
           className="relative w-full bg-surface"
@@ -93,38 +84,13 @@ export function PinCard({
           </ViewTransition>
 
           {/* On-demand caption: gradient scrim + text, revealed on hover/focus. */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-2 bg-gradient-to-t from-black/70 via-black/25 to-transparent p-3 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100 group-hover:opacity-100">
-            {item.caption && (
+          {item.caption && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end bg-gradient-to-t from-black/70 via-black/25 to-transparent p-3 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100 group-hover:opacity-100">
               <p className="truncate text-sm font-medium text-white">{item.caption}</p>
-            )}
-            <div className="flex shrink-0 items-center gap-1.5">
-              {matchPct !== null && (
-                <span className="text-[0.65rem] font-semibold tabular-nums text-accent-soft">
-                  {matchPct}% match
-                </span>
-              )}
-              <span className="text-[0.65rem] font-medium uppercase tracking-wide text-accent-soft">
-                {item.platform}
-              </span>
-            </div>
-          </div>
-
-          {/* Taste-match strength — a woven gold thread across the base whose
-              length tracks the real cosine score (migration 0015). Always faintly
-              visible, brightens on hover. Decorative; the % above is the a11y text. */}
-          {matchPct !== null && (
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-[3px] bg-black/10"
-            >
-              <div
-                className="h-full bg-accent opacity-70 transition-opacity duration-300 group-hover:opacity-100"
-                style={{ width: `${matchPct}%` }}
-              />
             </div>
           )}
 
-          {/* Hairline gold frame on hover — the weave signature. */}
+          {/* Hairline gold frame on hover, the weave signature. */}
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 rounded-lg opacity-0 ring-1 ring-inset ring-accent/60 transition-opacity duration-300 group-hover:opacity-100"
