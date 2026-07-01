@@ -30,7 +30,10 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node 22: supabase-js needs a global WebSocket (added in Node 21/22).
+          # On Node 20 createClient throws "Node.js 20 detected without native
+          # WebSocket support" and every source fails.
+          node-version: 22
           cache: npm
 
       - name: Install deps
