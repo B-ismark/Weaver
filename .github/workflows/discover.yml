@@ -20,17 +20,22 @@ jobs:
       - name: Normalize APP_URL (strip trailing slash)
         run: echo "APP_URL=${APP_URL%/}" >> "$GITHUB_ENV"
 
-      - name: Pull new discovery candidates (open keyless sources + best-effort walled ones)
+      - name: Pull new discovery candidates (one source per request)
         run: |
-          # -L follows redirects (308 preserves POST + body); -f fails on >=400.
-          # arena/openverse/artic/metmuseum/wikimedia are keyless & don't block
-          # datacenter IPs (reliable). reddit needs REDDIT_CLIENT_ID/SECRET;
-          # artstation is best-effort (Cloudflare) — both yield nothing, not fail.
-          curl -fsSL -X POST "$APP_URL/api/discover" \
-            -H "Authorization: Bearer $CRON_SECRET" \
-            -H "Content-Type: application/json" \
-            -d '{"sources":["arena","openverse","artic","metmuseum","wikimedia","reddit","artstation"]}'
-          echo
+          # Each source is its own request so it fits Vercel's 60s function cap —
+          # sweeping all of them in one POST times out (504) because embedding runs
+          # on the free-CPU Space (cold start + per-image cost). A single slow or
+          # walled source (reddit/artstation) must NOT fail the whole job, so we
+          # capture the HTTP code and only warn.
+          for s in arena openverse artic metmuseum wikimedia reddit artstation; do
+            echo "== $s"
+            code=$(curl -sSL -o /tmp/d.json -w "%{http_code}" -X POST "$APP_URL/api/discover" \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "{\"sources\":[\"$s\"]}" || echo "000")
+            cat /tmp/d.json 2>/dev/null; echo " (HTTP $code)"
+            [ "$code" = "200" ] || echo "  ! $s did not succeed (non-fatal)"
+          done
 
       - name: Sync Pinterest saved pins (taste signal)
         run: |

@@ -25,7 +25,7 @@ export interface DiscoveryReport {
 // Bound embeddings per refresh (§10.2). On serverless (Vercel Hobby = 60s hard
 // cap) a big batch + HF Space cold start blows the limit, so keep it small and
 // let the daily cron accumulate. Tunable via env for a longer-limit host.
-const EMBED_CAP = Number(process.env.DISCOVERY_EMBED_CAP) || 48;
+const EMBED_CAP = Number(process.env.DISCOVERY_EMBED_CAP) || 30;
 
 export async function runDiscovery(source: CandidateSource): Promise<DiscoveryReport> {
   const supabase = getServerSupabase();
