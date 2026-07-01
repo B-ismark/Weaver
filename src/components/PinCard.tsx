@@ -91,8 +91,13 @@ export function PinCard({
             }`}
           />
           {/* Shared-element morph: this thumbnail is the same node as the detail
-              hero (same name) — the browser animates it expanding on navigation. */}
-          <ViewTransition name={`item-${item.id}`} share="morph">
+              hero (same name) — the browser animates it expanding on navigation.
+              default="none" is REQUIRED: without it this ViewTransition fires its
+              enter animation on EVERY unrelated transition (the first client
+              navigation into the feed, any Suspense reveal), so all tiles flash out
+              at once and the header snapshot jumps. With it, the tile only animates
+              when it IS the shared element being morphed into the detail hero. */}
+          <ViewTransition name={`item-${item.id}`} share="morph" default="none">
             <Image
               src={item.thumbUrl}
               alt={item.caption}

@@ -52,13 +52,29 @@ function client() {
   }
 }
 
+/**
+ * Feed tuning knobs (migration 0016), overridable via env without a redeploy of
+ * the SQL. Omitted keys fall back to the function's SQL defaults (6h / 0.85).
+ *   FEED_SEEN_GRACE_HOURS — how long a seen candidate stays eligible.
+ *   FEED_HIDE_SIMILARITY  — cosine above which a candidate is suppressed as
+ *                           "like" something you hid.
+ */
+function feedTuning(): Record<string, number> {
+  const params: Record<string, number> = {};
+  const grace = Number(process.env.FEED_SEEN_GRACE_HOURS);
+  const hideSim = Number(process.env.FEED_HIDE_SIMILARITY);
+  if (Number.isFinite(grace)) params.seen_grace_hours = grace;
+  if (Number.isFinite(hideSim)) params.hide_similarity = hideSim;
+  return params;
+}
+
 /** Home feed: taste-ranked when possible, recency otherwise. */
 export async function getFeedItems(limit = 60): Promise<FeedItem[]> {
   const supabase = client();
   if (!supabase) return [];
 
   // Try taste ranking first (returns [] when no centroids yet).
-  const ranked = await supabase.rpc("feed_by_taste", { match_count: limit });
+  const ranked = await supabase.rpc("feed_by_taste", { match_count: limit, ...feedTuning() });
   if (!ranked.error && ranked.data?.length) {
     return (ranked.data as ItemRow[]).map(rowToFeedItem);
   }

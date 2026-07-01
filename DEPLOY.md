@@ -53,6 +53,8 @@ Project → Settings → Environment Variables (Production). Copy from `.env.loc
 | `WEAVER_PASSCODE` | **new** — the access passcode; unset = app is public |
 | `CRON_SECRET` | **new** — generate one (below); guards the cron endpoints |
 | `DISCOVERY_EMBED_CAP` | optional, default 48 (sized for the 60s function limit) |
+| `FEED_SEEN_GRACE_HOURS` | optional, default 6 — hours a scrolled-past tile stays in the feed before it drops out |
+| `FEED_HIDE_SIMILARITY` | optional, default 0.85 — cosine above which a candidate is suppressed as "like" something you hid (lower = more aggressive) |
 | `PINTEREST_ACCESS_TOKEN` | optional — once Pinterest activates the app |
 
 Generate a `CRON_SECRET`:

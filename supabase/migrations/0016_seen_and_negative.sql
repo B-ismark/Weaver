@@ -21,8 +21,20 @@ create index if not exists items_seen_at_idx on items (seen_at);
 
 drop function if exists feed_by_taste(int, float);
 drop function if exists feed_by_taste(int);
+drop function if exists feed_by_taste(int, float, float, float);
 
-create function feed_by_taste(match_count int default 60, explore_frac float default 0.2)
+-- Two tuning knobs (defaults preserve prior behaviour), overridable per-call from
+-- getFeedItems via the FEED_SEEN_GRACE_HOURS / FEED_HIDE_SIMILARITY env vars:
+--   seen_grace_hours — how long after first impression a candidate stays eligible
+--                      (bigger = repeats linger longer; smaller = feed churns faster).
+--   hide_similarity  — cosine above which a candidate counts as "like" a hidden
+--                      item and is suppressed (lower = hides suppress more aggressively).
+create function feed_by_taste(
+  match_count int default 60,
+  explore_frac float default 0.2,
+  seen_grace_hours float default 6,
+  hide_similarity float default 0.85
+)
 returns table (
   id uuid,
   platform text,
@@ -56,7 +68,7 @@ as $$
       and i.embedding is not null
       and (select n from ntargets) > 0
       -- impression exclusion: drop candidates first seen > 6h ago
-      and (i.seen_at is null or i.seen_at > now() - interval '6 hours')
+      and (i.seen_at is null or i.seen_at > now() - seen_grace_hours * interval '1 hour')
       -- negative keywords (taste page)
       and not exists (
         select 1 from neg where (1 - (i.embedding <=> neg.v)) > 0.26
@@ -71,7 +83,7 @@ as $$
       and not exists (
         select 1 from items h
         where h.hidden and h.embedding is not null
-          and (1 - (i.embedding <=> h.embedding)) > 0.85
+          and (1 - (i.embedding <=> h.embedding)) > hide_similarity
       )
   ),
   scored as (
