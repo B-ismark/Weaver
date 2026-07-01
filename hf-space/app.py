@@ -18,6 +18,7 @@ embedding pipeline.
 
 import io
 import os
+from urllib.parse import urlsplit
 
 import numpy as np
 import open_clip
@@ -90,7 +91,13 @@ def embed_image(req: ImageRequest, authorization: str | None = Header(default=No
     dims: list[list[int] | None] = [None] * len(urls)
     for i, url in enumerate(urls):
         try:
-            r = requests.get(url, headers={"User-Agent": FETCH_UA}, timeout=30)
+            # Send a same-origin Referer alongside the browser UA. Some image hosts
+            # (e.g. artic.edu's IIIF server) 403 a UA-only request but serve fine
+            # when a Referer is present; deriving it from the image's own origin is
+            # generic and harmless to hosts that ignore it.
+            parts = urlsplit(url)
+            referer = f"{parts.scheme}://{parts.netloc}/" if parts.scheme and parts.netloc else url
+            r = requests.get(url, headers={"User-Agent": FETCH_UA, "Referer": referer}, timeout=30)
             r.raise_for_status()
             img = Image.open(io.BytesIO(r.content)).convert("RGB")
             dims[i] = [img.width, img.height]  # source-agnostic dims (no layout shift)

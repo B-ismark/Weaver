@@ -1,5 +1,6 @@
 import "server-only";
 import type { CandidateItem, CandidateSource } from "../types";
+import { fetchJsonResilient } from "../fetch";
 
 /**
  * Reddit discovery source via application-only OAuth (free).
@@ -9,7 +10,10 @@ import type { CandidateItem, CandidateSource } from "../types";
  * get a bearer token, then read listings from oauth.reddit.com. Create a "web
  * app" at reddit.com/prefs/apps and set:
  *   REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET
- * Without them this source yields nothing (harmless — other sources still run).
+ * Without creds we fall back to the resilient reader front on the public .json.
+ * NOTE: Reddit also blocks Jina's IPs, so that free fallback only works when a
+ * residential DISCOVERY_PROXY_URL is configured — OAuth creds remain the primary
+ * path. Either way a total failure just yields an empty batch (other sources run).
  *
  * Image posts only; hotlinks the preview (i.redd.it / preview.redd.it).
  */
@@ -66,13 +70,28 @@ function decode(s: string): string {
   return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'");
 }
 
-async function pullSubreddit(sub: string, token: string): Promise<CandidateItem[]> {
-  const res = await fetch(`https://oauth.reddit.com/r/${sub}/hot?limit=${PER_SUB}&raw_json=1`, {
-    headers: { Authorization: `Bearer ${token}`, "User-Agent": UA },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!res.ok) return [];
-  const json = (await res.json()) as { data?: { children?: RedditChild[] } };
+type Listing = { data?: { children?: RedditChild[] } };
+
+async function fetchListing(sub: string, token: string | null): Promise<Listing | null> {
+  // With app creds: authenticated read from oauth.reddit.com (reliable).
+  if (token) {
+    const res = await fetch(`https://oauth.reddit.com/r/${sub}/hot?limit=${PER_SUB}&raw_json=1`, {
+      headers: { Authorization: `Bearer ${token}`, "User-Agent": UA },
+      signal: AbortSignal.timeout(20_000),
+    }).catch(() => null);
+    if (res?.ok) return (await res.json().catch(() => null)) as Listing | null;
+  }
+  // No creds (or auth failed): the public .json is walled from datacenter IPs, so
+  // escalate through the proxy/reader front to still pull a token-free batch.
+  return fetchJsonResilient<Listing>(
+    `https://www.reddit.com/r/${sub}/hot.json?limit=${PER_SUB}&raw_json=1`,
+    { headers: { "User-Agent": UA } }
+  );
+}
+
+async function pullSubreddit(sub: string, token: string | null): Promise<CandidateItem[]> {
+  const json = await fetchListing(sub, token);
+  if (!json) return [];
   const out: CandidateItem[] = [];
 
   for (const { data: p } of json.data?.children ?? []) {
@@ -97,8 +116,9 @@ async function pullSubreddit(sub: string, token: string): Promise<CandidateItem[
 export const redditSource: CandidateSource = {
   name: "reddit",
   async pull(): Promise<CandidateItem[]> {
+    // token may be null (creds unset / auth failed) → pullSubreddit falls back to
+    // the resilient reader front instead of yielding nothing.
     const token = await getToken(Date.now());
-    if (!token) return []; // creds unset or auth failed → yield nothing
     const batches = await Promise.all(
       SUBREDDITS.map((s) => pullSubreddit(s, token).catch(() => [] as CandidateItem[]))
     );

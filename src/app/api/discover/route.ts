@@ -3,6 +3,9 @@ import { arenaSource } from "@/discovery/sources/arena";
 import { openverseSource } from "@/discovery/sources/openverse";
 import { redditSource } from "@/discovery/sources/reddit";
 import { artstationSource } from "@/discovery/sources/artstation";
+import { articSource } from "@/discovery/sources/artic";
+import { metmuseumSource } from "@/discovery/sources/metmuseum";
+import { wikimediaSource } from "@/discovery/sources/wikimedia";
 import { getServerSupabase } from "@/lib/supabase/server";
 // Auth is enforced in proxy.ts (session cookie, or CRON_SECRET bearer for the
 // scheduled job) — no in-route guard needed.
@@ -27,6 +30,9 @@ const SOURCES = {
   openverse: openverseSource,
   reddit: redditSource,
   artstation: artstationSource,
+  artic: articSource,
+  metmuseum: metmuseumSource,
+  wikimedia: wikimediaSource,
 };
 
 export async function POST(request: Request): Promise<Response> {
