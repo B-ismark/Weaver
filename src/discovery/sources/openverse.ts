@@ -13,6 +13,16 @@ const QUERIES = [
   "film still",
   "landscape photography",
   "graphic design poster",
+  "street photography",
+  "abstract painting",
+  "portrait",
+  "interior design",
+  "nature macro",
+  "typography",
+  "vintage illustration",
+  "urban landscape",
+  "textile pattern",
+  "still life photography",
 ];
 const PER = 20;
 

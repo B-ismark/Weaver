@@ -17,6 +17,18 @@ const QUERIES = [
   "abstract art",
   "still life",
   "minimalism design",
+  "street photography",
+  "mountain landscape",
+  "interior design",
+  "vintage poster",
+  "macro photography",
+  "aerial photography",
+  "wildlife photography",
+  "art deco",
+  "brutalist architecture",
+  "night photography",
+  "botanical",
+  "ceramic art",
 ];
 const PER = 20;
 const THUMB_W = 843; // requested thumbnail width (feed-sized)

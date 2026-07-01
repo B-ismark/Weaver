@@ -14,6 +14,9 @@ import { fetchJsonResilient } from "../fetch";
  * centroids anyway, so breadth here just widens the candidate pool. Routed through
  * fetchJsonResilient for the free jina fallback (harmless — this API rarely blocks).
  */
+// Wide, aesthetically diverse terms. Every query runs each sweep and the batch is
+// capped (EMBED_CAP), so a deep list just gives a bigger well: as the top results
+// get deduped over successive runs, fresh picks keep surfacing from lower down.
 const QUERIES = [
   "landscape",
   "portrait",
@@ -23,6 +26,18 @@ const QUERIES = [
   "japanese print",
   "textile design",
   "modern photography",
+  "impressionism",
+  "surrealism",
+  "cityscape",
+  "botanical illustration",
+  "ceramics",
+  "sculpture",
+  "seascape",
+  "figure drawing",
+  "poster design",
+  "art nouveau",
+  "geometric abstraction",
+  "night scene",
 ];
 const PER = 20;
 const IMG_WIDTH = 843; // IIIF render width; good for the masonry feed

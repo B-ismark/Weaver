@@ -7,7 +7,7 @@ name: Weaver auto-refresh
 
 on:
   schedule:
-    - cron: "0 7 * * *" # daily 07:00 UTC
+    - cron: "0 */6 * * *" # every 6h (00/06/12/18 UTC) — ~360 GH Actions min/mo, safe
   workflow_dispatch: {} # allow manual runs from the Actions tab
 
 jobs:

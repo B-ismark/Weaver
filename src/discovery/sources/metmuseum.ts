@@ -10,7 +10,20 @@ import { fetchJsonResilient } from "../fetch";
  * serverless budget we cap objects fetched per query (OBJECTS_PER_Q). Images are
  * served from images.metmuseum.org, which serves datacenter IPs fine.
  */
-const QUERIES = ["landscape", "portrait", "still life", "abstract", "photography", "textile"];
+// Kept moderate on purpose: this source is N+1 (queries × OBJECTS_PER_Q object
+// fetches), so a huge list balloons the fan-out against the 60s cap.
+const QUERIES = [
+  "landscape",
+  "portrait",
+  "still life",
+  "abstract",
+  "photography",
+  "textile",
+  "impressionism",
+  "sculpture",
+  "ceramics",
+  "japanese art",
+];
 const OBJECTS_PER_Q = 6; // bound the N+1 fan-out (queries × this = object fetches)
 const UA = "weaver-personal-aggregator/0.1 (discovery)";
 
