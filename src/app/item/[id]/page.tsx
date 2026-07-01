@@ -4,8 +4,7 @@ import { notFound } from "next/navigation";
 import { getItemById, getSimilarItems } from "@/lib/items";
 import { shouldOptimize } from "@/lib/imageHost";
 import { MasonryFeed } from "@/components/MasonryFeed";
-import { SiteHeader } from "@/components/SiteHeader";
-import { PrimaryNav } from "@/components/PrimaryNav";
+import { AppHeader } from "@/components/AppHeader";
 import { SourceOutLink } from "@/components/SourceOutLink";
 import { ItemActions } from "@/components/ItemActions";
 import { BackButton } from "@/components/BackButton";
@@ -26,11 +25,14 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <SiteHeader maxWidth="max-w-5xl" leading={<BackButton />}>
-        <PrimaryNav />
-      </SiteHeader>
+      <AppHeader />
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
+        {/* Back sits between the nav and the image, not in the nav, so the nav
+            stays identical to the feed and anchors the morph. */}
+        <div className="mb-4">
+          <BackButton />
+        </div>
         <div className="grid gap-6 md:grid-cols-[2fr_1fr]">
           {/* Full-resolution, hotlinked (§5.2). Falls back to source link on 403. */}
           <div

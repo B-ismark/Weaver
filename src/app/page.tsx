@@ -1,7 +1,5 @@
 import { MasonryFeed } from "@/components/MasonryFeed";
-import { SearchBar } from "@/components/SearchBar";
-import { SiteHeader } from "@/components/SiteHeader";
-import { PrimaryNav } from "@/components/PrimaryNav";
+import { AppHeader } from "@/components/AppHeader";
 import { DiscoverButton } from "@/components/DiscoverButton";
 import { Reveal } from "@/components/motion/Reveal";
 import { getFeedItems } from "@/lib/items";
@@ -19,12 +17,7 @@ export default async function HomePage() {
 
   return (
     <>
-      <SiteHeader>
-        <div className="hidden flex-1 justify-center sm:flex">
-          <SearchBar />
-        </div>
-        <PrimaryNav />
-      </SiteHeader>
+      <AppHeader />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">
         <Reveal className="mb-8">

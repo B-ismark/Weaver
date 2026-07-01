@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { logEngagement } from "@/lib/engagement";
+import { useLiked, setLiked } from "@/lib/likedStore";
 
 /**
  * Save / Not-interested / Share for a feed item, with weave-themed
@@ -121,7 +122,9 @@ export function ItemActions({
   initialLiked?: boolean;
   onResolved?: (id: string) => void;
 }) {
-  const [liked, setLiked] = useState(initialLiked);
+  // Shared across all instances for this id (grid tile + detail), seeded from
+  // the server-persisted value.
+  const liked = useLiked(itemId, initialLiked);
   const [hiding, setHiding] = useState(false);
   const [shared, setShared] = useState<"" | "copied">("");
   const saveRef = useRef<HTMLButtonElement>(null);
@@ -136,7 +139,7 @@ export function ItemActions({
   function onToggleLike() {
     if (hiding) return;
     const next = !liked;
-    setLiked(next);
+    setLiked(itemId, next);
     pop(saveIcon.current);
     if (next) {
       silkBurst(saveRef.current);

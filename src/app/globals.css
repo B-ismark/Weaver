@@ -190,6 +190,20 @@ html.lenis body {
   }
 }
 
+/* Anchor the app header: it renders identically on the feed and detail views, so
+   holding it perfectly still (no fade, no slide) makes the image the only thing
+   that moves during the morph. */
+::view-transition-group(site-header) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(site-header) {
+  display: none;
+}
+::view-transition-new(site-header) {
+  animation: none;
+}
+
 /* efficiency + a11y: honor reduced-motion preference. */
 @media (prefers-reduced-motion: reduce) {
   *,

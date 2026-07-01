@@ -19,7 +19,12 @@ export function SiteHeader({
   maxWidth?: string;
 }) {
   return (
-    <header className="sticky top-0 z-20 border-b border-surface bg-background/80 backdrop-blur">
+    <header
+      className="sticky top-0 z-20 border-b border-surface bg-background/80 backdrop-blur"
+      // Anchor the header across route view-transitions so it stays put (the
+      // morph moves only the image). See globals.css site-header rules.
+      style={{ viewTransitionName: "site-header" }}
+    >
       <div className={`mx-auto flex ${maxWidth} items-center gap-4 px-4 py-3`}>
         <Link
           href="/"
