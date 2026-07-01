@@ -1,6 +1,7 @@
 import "server-only";
 import type { CandidateItem, CandidateSource } from "../types";
 import { fetchJsonResilient } from "../fetch";
+import { getTasteSeeds } from "../seeds";
 
 /**
  * Wikimedia Commons discovery source (free, NO key, no IP wall, CC-licensed).
@@ -10,25 +11,15 @@ import { fetchJsonResilient } from "../fetch";
  * open CDN that doesn't block datacenter IPs. feed_by_taste re-ranks against the
  * taste centroids, so the query terms just seed breadth.
  */
-const QUERIES = [
+// A few qualified phrases kept as evergreen breadth; taste-derived seeds (below)
+// are mixed in at pull time so the query set follows the user's taste.
+const EVERGREEN_QUERIES = [
   "landscape painting",
   "portrait photography",
   "architecture photograph",
   "abstract art",
   "still life",
-  "minimalism design",
   "street photography",
-  "mountain landscape",
-  "interior design",
-  "vintage poster",
-  "macro photography",
-  "aerial photography",
-  "wildlife photography",
-  "art deco",
-  "brutalist architecture",
-  "night photography",
-  "botanical",
-  "ceramic art",
 ];
 const PER = 20;
 const THUMB_W = 843; // requested thumbnail width (feed-sized)
@@ -69,7 +60,9 @@ async function search(q: string): Promise<CandidateItem[]> {
 export const wikimediaSource: CandidateSource = {
   name: "wikimedia",
   async pull(): Promise<CandidateItem[]> {
-    const batches = await Promise.all(QUERIES.map((q) => search(q).catch(() => [] as CandidateItem[])));
+    const seeds = await getTasteSeeds(8);
+    const queries = [...new Set([...seeds, ...EVERGREEN_QUERIES])];
+    const batches = await Promise.all(queries.map((q) => search(q).catch(() => [] as CandidateItem[])));
     return batches.flat();
   },
 };

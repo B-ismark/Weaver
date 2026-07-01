@@ -24,8 +24,18 @@ import { useState, useTransition } from "react";
  * A per-source failure is tolerated (contributes 0), and the feed refreshes once
  * at the end. Accessible: busy + progress announced via aria-live.
  */
-// Keyless / open sources (mirrors the route's SOURCES; reddit omitted — 403s).
-const SOURCES = ["arena", "openverse", "artstation", "artic", "metmuseum", "wikimedia"] as const;
+// Keyless / open sources (mirrors the route's SOURCES; reddit omitted — 403s;
+// europeana/smithsonian omitted — they only produce with an API key set server-side).
+const SOURCES = [
+  "arena",
+  "openverse",
+  "artstation",
+  "artic",
+  "metmuseum",
+  "wikimedia",
+  "cleveland",
+  "nasa",
+] as const;
 const POOL = 3; // concurrent invocations — small, to respect the HF Space.
 
 type Doctor = { ok?: boolean; summary?: { ok?: string[] } };

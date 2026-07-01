@@ -1,13 +1,20 @@
 name: Weaver auto-refresh
 
-# D4 — scheduled discovery + Pinterest taste sync. Hits the deployed app's
-# cron-guarded endpoints. Requires two repo secrets:
-#   APP_URL      e.g. https://weaver.example.com   (no trailing slash)
-#   CRON_SECRET  matches the app's CRON_SECRET env  (Bearer auth)
+# Scheduled discovery + Pinterest taste sync.
+#
+# Discovery now runs IN THE RUNNER (not via the Vercel route) so it isn't bound by
+# Vercel's 60s function cap — DISCOVERY_EMBED_CAP can be large and the feed's
+# supply keeps up with browsing. Embedding still happens on the HF Space; the
+# runner just orchestrates + writes to Supabase directly.
+#
+# Repo secrets required for discovery (the app's server env):
+#   NEXT_PUBLIC_SUPABASE_URL   SUPABASE_SECRET_KEY   EMBED_ENDPOINT   EMBED_TOKEN
+# Optional: EUROPEANA_KEY, SMITHSONIAN_API_KEY, RSS_FEEDS, DISCOVERY_PROXY_URL.
+# Still used by the Pinterest/recluster steps: APP_URL, CRON_SECRET.
 
 on:
   schedule:
-    - cron: "0 */6 * * *" # every 6h (00/06/12/18 UTC) — ~360 GH Actions min/mo, safe
+    - cron: "0 */6 * * *" # every 6h (00/06/12/18 UTC)
   workflow_dispatch: {} # allow manual runs from the Actions tab
 
 jobs:
@@ -17,29 +24,39 @@ jobs:
       APP_URL: ${{ secrets.APP_URL }}
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
     steps:
-      - name: Normalize APP_URL (strip trailing slash)
-        run: echo "APP_URL=${APP_URL%/}" >> "$GITHUB_ENV"
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Pull new discovery candidates (one source per request)
-        run: |
-          # Each source is its own request so it fits Vercel's 60s function cap —
-          # sweeping all of them in one POST times out (504) because embedding runs
-          # on the free-CPU Space (cold start + per-image cost). A single slow or
-          # walled source (reddit/artstation) must NOT fail the whole job, so we
-          # capture the HTTP code and only warn.
-          for s in arena openverse artic metmuseum wikimedia reddit artstation; do
-            echo "== $s"
-            code=$(curl -sSL -o /tmp/d.json -w "%{http_code}" -X POST "$APP_URL/api/discover" \
-              -H "Authorization: Bearer $CRON_SECRET" \
-              -H "Content-Type: application/json" \
-              -d "{\"sources\":[\"$s\"]}" || echo "000")
-            cat /tmp/d.json 2>/dev/null; echo " (HTTP $code)"
-            [ "$code" = "200" ] || echo "  ! $s did not succeed (non-fatal)"
-          done
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          # Node 22: supabase-js needs a global WebSocket (added in Node 21/22).
+          # On Node 20 createClient throws "Node.js 20 detected without native
+          # WebSocket support" and every source fails.
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Discover (off-Vercel, large batch)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          EMBED_ENDPOINT: ${{ secrets.EMBED_ENDPOINT }}
+          EMBED_TOKEN: ${{ secrets.EMBED_TOKEN }}
+          EUROPEANA_KEY: ${{ secrets.EUROPEANA_KEY }}
+          SMITHSONIAN_API_KEY: ${{ secrets.SMITHSONIAN_API_KEY }}
+          RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
+          DISCOVERY_PROXY_URL: ${{ secrets.DISCOVERY_PROXY_URL }}
+          # No 60s cap here → embed a lot more per run than the Vercel route can.
+          DISCOVERY_EMBED_CAP: "500"
+        # Sweep the open sources; each is isolated (a failure is logged, not fatal).
+        run: npm run discover -- arena openverse artic metmuseum wikimedia cleveland nasa europeana smithsonian rss
 
       - name: Sync Pinterest saved pins (taste signal)
         run: |
-          code=$(curl -sSL -o /tmp/sync.json -w "%{http_code}" -X POST "$APP_URL/api/pinterest/sync" \
+          code=$(curl -sSL -o /tmp/sync.json -w "%{http_code}" -X POST "${APP_URL%/}/api/pinterest/sync" \
             -H "Authorization: Bearer $CRON_SECRET")
           cat /tmp/sync.json; echo
           # 409 = Pinterest not connected yet → not a failure, just skip.
@@ -49,4 +66,4 @@ jobs:
       - name: Recompute taste centroids
         run: |
           # 422 when there aren't enough taste embeddings yet — tolerate it.
-          curl -sSL -X POST "$APP_URL/api/recluster" | cat; echo
+          curl -sSL -X POST "${APP_URL%/}/api/recluster" -H "Authorization: Bearer $CRON_SECRET" | cat; echo

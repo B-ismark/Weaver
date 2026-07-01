@@ -28,5 +28,23 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: "maskable",
       },
     ],
+    // Web Share Target: once installed, Weaver appears in the OS "Share" sheet.
+    // Sharing an image FILE or a LINK from any app (Instagram, Pinterest, a
+    // browser…) posts here — /api/share resolves it to an image, embeds it, and
+    // adds it to the taste set. No platform API, no scraping, uses the user's own
+    // session. The typed manifest doesn't cover share_target yet, so cast it.
+    ...( {
+      share_target: {
+        action: "/api/share",
+        method: "POST",
+        enctype: "multipart/form-data",
+        params: {
+          title: "title",
+          text: "text",
+          url: "url",
+          files: [{ name: "image", accept: ["image/*"] }],
+        },
+      },
+    } as object),
   };
 }

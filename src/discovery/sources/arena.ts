@@ -1,5 +1,6 @@
 import "server-only";
 import type { CandidateItem, CandidateSource } from "../types";
+import { getTasteSeeds } from "../seeds";
 
 /**
  * Are.na discovery source (free, public API, no auth). Are.na is curated visual
@@ -8,10 +9,10 @@ import type { CandidateItem, CandidateSource } from "../types";
  *
  * Strategy: for each taste seed term, search for the most image-rich channels,
  * then pull their contents. This finds large active channels dynamically instead
- * of hard-coding slugs (which mostly point at small/text channels). Seeds echo
- * the user's boards (Photography, Art, Architecture) — seed-guided pull (§5.2).
+ * of hard-coding slugs (which mostly point at small/text channels). Seeds are
+ * DERIVED from the user's taste (captions + positive keywords) so the wells
+ * follow taste drift — seed-guided pull (§5.2). See discovery/seeds.ts.
  */
-const SEEDS = ["photography", "architecture", "art", "graphic design", "film", "interior design"];
 const CHANNELS_PER_SEED = 2;
 const BLOCKS_PER_CHANNEL = 25;
 const MIN_CHANNEL_LENGTH = 50; // skip tiny channels
@@ -73,7 +74,8 @@ async function pullChannel(slug: string): Promise<CandidateItem[]> {
 export const arenaSource: CandidateSource = {
   name: "arena",
   async pull(): Promise<CandidateItem[]> {
-    const slugLists = await Promise.all(SEEDS.map((s) => topChannels(s).catch(() => [])));
+    const seeds = await getTasteSeeds(6);
+    const slugLists = await Promise.all(seeds.map((s) => topChannels(s).catch(() => [])));
     const slugs = [...new Set(slugLists.flat())]; // dedup channels across seeds
     const batches = await Promise.all(slugs.map((s) => pullChannel(s).catch(() => [])));
     return batches.flat();
