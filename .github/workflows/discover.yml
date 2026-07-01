@@ -14,12 +14,26 @@ name: Weaver auto-refresh
 
 on:
   schedule:
-    - cron: "0 */6 * * *" # every 6h (00/06/12/18 UTC)
+    # Every 3h at :23 — deliberately OFF the top of the hour. GitHub queues/drops
+    # scheduled runs hardest at :00 (observed: :00 ticks delayed 30-45min and only
+    # ~1 of 4 daily ticks actually landing), so an odd minute + higher frequency
+    # keeps the feed topped up despite best-effort scheduling. Public repo → Actions
+    # minutes are free, so frequency costs nothing.
+    - cron: "23 */3 * * *"
   workflow_dispatch: {} # allow manual runs from the Actions tab
+
+# Never let two sweeps run at once. Discovery is idempotent now (image_url unique
+# index, migration 0020), but concurrent runs still waste embed budget and were the
+# historical source of duplicate candidates — queue the next run instead of
+# overlapping (cancel-in-progress:false = don't kill an in-flight sweep).
+concurrency:
+  group: weaver-discovery
+  cancel-in-progress: false
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 30 # a hung sweep can't linger and collide with the next tick
     env:
       APP_URL: ${{ secrets.APP_URL }}
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
