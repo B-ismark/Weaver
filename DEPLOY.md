@@ -6,9 +6,17 @@ deployed cron endpoints. The repo must live on GitHub (the cron needs it).
 
 ## 0. Before you start
 
-- Supabase migrations must be applied in the SQL editor: `0007_feed_polish.sql`
-  (done) and `0008_oauth_tokens.sql` (only needed for the Pinterest **OAuth**
-  flow — skip if using a manual `PINTEREST_ACCESS_TOKEN`).
+- Supabase migrations must be applied in the SQL editor, in order, through the
+  latest (`0001` … `0015`). Apply any you haven't yet run. Notable recent ones:
+  - `0012_enable_rls_lockdown.sql` — RLS hardening on core tables.
+  - `0013_artic_platform.sql`, `0014_museum_platforms.sql` — allow the new
+    keyless discovery sources (Art Institute of Chicago, The Met, Wikimedia).
+  - `0015_feed_score.sql` — redefines `feed_by_taste` / `items_like` to also
+    return the raw cosine **taste-match score**, which the UI renders as the
+    per-tile gold "match" thread. Return-type change, so it drops + recreates
+    both functions — apply it as-is.
+  - `0008_oauth_tokens.sql` is only needed for the Pinterest **OAuth** flow —
+    skip if using a manual `PINTEREST_ACCESS_TOKEN`.
 - `.env.local` is gitignored (`.env*`) — secrets will **not** be committed.
   Verify with `git status` before the first push.
 

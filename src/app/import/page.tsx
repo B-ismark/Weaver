@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { ImportForm } from "@/components/ImportForm";
 import { PinterestPanel } from "@/components/PinterestPanel";
+import { SiteHeader } from "@/components/SiteHeader";
+import { PrimaryNav } from "@/components/PrimaryNav";
 import { isConfigured, isConnected, canStartOAuth } from "@/lib/pinterest";
 
 export const metadata = { title: "Import · Weaver" };
@@ -16,16 +17,14 @@ export default async function ImportPage({
 
   return (
     <>
-      <header className="sticky top-0 z-10 border-b border-surface bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-semibold tracking-tight">Import</h1>
-          <Link href="/" className="text-sm text-muted hover:text-foreground">
-            ← Feed
-          </Link>
-        </div>
-      </header>
+      <SiteHeader maxWidth="max-w-3xl">
+        <PrimaryNav />
+      </SiteHeader>
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
+        <h1 className="mb-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+          Import
+        </h1>
         <p className="mb-6 max-w-prose text-sm text-muted">
           Bring in images you&apos;ve saved. Request your data export from the platform, unzip it,
           and upload the saved-pins file. Everything runs through one normalized pipeline, so the

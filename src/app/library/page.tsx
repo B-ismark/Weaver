@@ -1,5 +1,6 @@
-import Link from "next/link";
 import { MasonryFeed } from "@/components/MasonryFeed";
+import { SiteHeader } from "@/components/SiteHeader";
+import { PrimaryNav } from "@/components/PrimaryNav";
 import { getLibraryItems } from "@/lib/items";
 
 export const dynamic = "force-dynamic";
@@ -15,27 +16,28 @@ export default async function LibraryPage() {
 
   return (
     <>
-      <header className="sticky top-0 z-10 border-b border-surface bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-semibold tracking-tight">Library</h1>
-          <Link href="/" className="text-sm text-muted hover:text-foreground">
-            ← Feed
-          </Link>
-        </div>
-      </header>
+      <SiteHeader>
+        <PrimaryNav />
+      </SiteHeader>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">
+        <div className="mb-8">
+          <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+            Your library
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            {items.length === 0
+              ? "The threads that shape your taste — imported saves and anything you keep."
+              : `${items.length} item${items.length === 1 ? "" : "s"} shaping your taste.`}
+          </p>
+        </div>
+
         {items.length === 0 ? (
           <p className="py-16 text-center text-sm text-muted">
             Nothing here yet. Import your saves, or save images from the feed.
           </p>
         ) : (
-          <>
-            <p className="mb-4 text-sm text-muted">
-              {items.length} item{items.length === 1 ? "" : "s"} shaping your taste
-            </p>
-            <MasonryFeed items={items} showActions={false} />
-          </>
+          <MasonryFeed items={items} showActions={false} />
         )}
       </main>
     </>

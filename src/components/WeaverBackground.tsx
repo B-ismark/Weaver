@@ -1,15 +1,20 @@
+"use client";
+
+import { useEffect, useLayoutEffect, useRef } from "react";
+
 /**
  * Weaver — ambient spider-web background. Fixed, full-viewport, decorative.
  *
- * Static SVG (no JS, no animation): lightweight, accessible, reduced-motion-safe.
- * Several orb-webs are anchored to the edges (partly off-screen) so the texture
- * reads as "multiple webs". Stroke uses currentColor at low opacity → adapts to
- * light/dark automatically.
+ * The geometry is deterministic SVG (a seeded PRNG jitters spoke angles/lengths,
+ * makes ring radii uneven, varies the inward sag, breaks some rings, and scatters
+ * faint "dew" nodes) so SSR/build output is stable and it looks hand-spun. Stroke
+ * uses currentColor at low opacity → adapts to light/dark automatically.
  *
- * Organic, not geometric: a seeded PRNG jitters spoke angles + lengths, makes
- * ring radii uneven, varies the inward sag per segment, breaks some rings, and
- * scatters faint "dew" nodes — so it looks hand-spun, not machined. Deterministic
- * (fixed seed) so SSR/build output is stable.
+ * On mount the web SPINS ITSELF ON: GSAP's DrawSVGPlugin animates every thread
+ * from 0 → full length with a randomised stagger, and the dew fades in after.
+ * GSAP is lazy-imported so it stays out of the initial bundle. Under
+ * prefers-reduced-motion the effect is skipped entirely and the finished web
+ * renders statically — no motion, no flash.
  */
 
 type Web = { cx: number; cy: number; r: number; spokes: number; rings: number; rotate: number; seed: number };
@@ -104,14 +109,71 @@ function buildWeb(web: Web): Built {
   return { threads, fine, dew };
 }
 
+// useLayoutEffect warns during SSR; fall back to useEffect on the server.
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+function prefersReducedMotion() {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
 export function WeaverBackground() {
   const built = WEBS.map(buildWeb);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  // Draw the web on with GSAP DrawSVG. Runs in a layout effect so we can hide the
+  // (already full-length) SVG before the browser paints — no full-web flash while
+  // GSAP lazy-loads. Skipped entirely under reduced motion → static web.
+  useIsoLayoutEffect(() => {
+    const svg = svgRef.current;
+    if (!svg || prefersReducedMotion()) return;
+
+    // Hide before first paint; GSAP reveals it once the threads are set to 0.
+    svg.style.opacity = "0";
+    let cancelled = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let ctx: any;
+
+    (async () => {
+      const [{ gsap }, { DrawSVGPlugin }] = await Promise.all([
+        import("gsap"),
+        import("gsap/DrawSVGPlugin"),
+      ]);
+      if (cancelled) {
+        svg.style.opacity = "1";
+        return;
+      }
+      gsap.registerPlugin(DrawSVGPlugin);
+      ctx = gsap.context(() => {
+        const threads = svg.querySelectorAll("path");
+        const dew = svg.querySelectorAll("circle");
+        gsap.set(svg, { opacity: 1 });
+        gsap.set(threads, { drawSVG: "0%" });
+        gsap.to(threads, {
+          drawSVG: "100%",
+          duration: 1.6,
+          ease: "power2.out",
+          stagger: { each: 0.012, from: "random" },
+        });
+        gsap.from(dew, { opacity: 0, scale: 0, transformOrigin: "center", duration: 0.9, delay: 0.9, stagger: 0.01 });
+      }, svg);
+    })();
+
+    return () => {
+      cancelled = true;
+      ctx?.revert?.();
+      svg.style.opacity = "1";
+    };
+  }, []);
+
   return (
     <div
       aria-hidden="true"
       className="pointer-events-none fixed inset-0 -z-10 overflow-hidden text-foreground"
     >
-      <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice" fill="none">
+      <svg ref={svgRef} width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice" fill="none">
         {built.map((b, i) => (
           <g key={i} stroke="currentColor" strokeLinecap="round">
             {/* main threads — more visible */}
@@ -126,11 +188,13 @@ export function WeaverBackground() {
                 <path key={j} d={d} />
               ))}
             </g>
-            {/* dew nodes */}
-            <g fill="currentColor" stroke="none" fillOpacity={0.12}>
+            {/* dew nodes — the web-hub gold, tying the ambient web to the accent. */}
+            <g style={{ color: "var(--accent)" }} fill="currentColor" stroke="none" fillOpacity={0.16}>
               {b.dew.map(([x, y], j) => (
                 <circle key={j} cx={x} cy={y} r={0.9} />
               ))}
+              {/* faint gold hub glow at each web's centre. */}
+              <circle cx={WEBS[i].cx} cy={WEBS[i].cy} r={2.2} fillOpacity={0.5} />
             </g>
           </g>
         ))}

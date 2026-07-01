@@ -23,6 +23,7 @@ type ItemRow = {
   thumb_height: number | null;
   source_link: string;
   caption: string | null;
+  score?: number | null; // present from feed_by_taste / items_like (migration 0015)
 };
 
 function rowToFeedItem(row: ItemRow): FeedItem {
@@ -35,6 +36,8 @@ function rowToFeedItem(row: ItemRow): FeedItem {
     platform: row.platform as Platform,
     width: row.thumb_width ?? DEFAULT_THUMB_W,
     height: row.thumb_height ?? DEFAULT_THUMB_H,
+    // Only carry a real number through; the RPC returns it post-0015, absent before.
+    score: typeof row.score === "number" ? row.score : undefined,
   };
 }
 

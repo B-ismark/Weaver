@@ -17,6 +17,10 @@ export interface FeedItem {
   platform: Platform | string;
   width: number;
   height: number;
+  // Taste-match strength in [0,1] (cosine), when the source RPC provides it
+  // (feed_by_taste / items_like after migration 0015). Undefined for recency/
+  // library reads or before the migration is applied — UI treats it as optional.
+  score?: number;
 }
 
 /**

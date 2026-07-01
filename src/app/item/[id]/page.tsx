@@ -1,11 +1,14 @@
-import Link from "next/link";
 import Image from "next/image";
+import { ViewTransition } from "react";
 import { notFound } from "next/navigation";
 import { getItemById, getSimilarItems } from "@/lib/items";
 import { shouldOptimize } from "@/lib/imageHost";
 import { MasonryFeed } from "@/components/MasonryFeed";
+import { SiteHeader } from "@/components/SiteHeader";
+import { PrimaryNav } from "@/components/PrimaryNav";
 import { SourceOutLink } from "@/components/SourceOutLink";
 import { ItemActions } from "@/components/ItemActions";
+import { Reveal } from "@/components/motion/Reveal";
 
 export const dynamic = "force-dynamic";
 
@@ -22,14 +25,10 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <header className="sticky top-0 z-10 border-b border-surface bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <Link href="/" className="text-sm text-muted hover:text-foreground">
-            ← Feed
-          </Link>
-          <span className="text-xs capitalize text-muted">{item.platform}</span>
-        </div>
-      </header>
+      <SiteHeader maxWidth="max-w-5xl">
+        <PrimaryNav />
+        <span className="text-xs uppercase tracking-wide text-muted">{item.platform}</span>
+      </SiteHeader>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
         <div className="grid gap-6 md:grid-cols-[2fr_1fr]">
@@ -38,29 +37,43 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
             className="relative w-full overflow-hidden rounded-2xl bg-surface"
             style={{ aspectRatio: `${item.width} / ${item.height}` }}
           >
-            <Image
-              src={item.fullUrl}
-              alt={item.caption || "Image"}
-              fill
-              sizes="(max-width: 768px) 100vw, 66vw"
-              unoptimized={!shouldOptimize(item.fullUrl)}
-              className="object-contain"
-              priority
-            />
+            {/* Same name as the feed thumbnail → the tile morphs into this hero. */}
+            <ViewTransition name={`item-${item.id}`} share="morph">
+              <Image
+                src={item.fullUrl}
+                alt={item.caption || "Image"}
+                fill
+                sizes="(max-width: 768px) 100vw, 66vw"
+                unoptimized={!shouldOptimize(item.fullUrl)}
+                className="object-contain"
+                priority
+              />
+            </ViewTransition>
           </div>
 
-          <aside className="flex flex-col gap-4">
-            {item.caption && <h1 className="text-lg font-medium">{item.caption}</h1>}
-            <SourceOutLink itemId={item.id} href={item.sourceLink} platform={item.platform} />
-            <ItemActions itemId={item.id} sourceLink={item.sourceLink} caption={item.caption} variant="bar" />
-          </aside>
+          <Reveal className="flex flex-col gap-4" delay={0.1}>
+            <aside className="flex flex-col gap-4">
+              {item.caption && (
+                <h1 className="font-display text-2xl font-medium leading-snug">{item.caption}</h1>
+              )}
+              <SourceOutLink itemId={item.id} href={item.sourceLink} platform={item.platform} />
+              <ItemActions itemId={item.id} sourceLink={item.sourceLink} caption={item.caption} variant="bar" />
+            </aside>
+          </Reveal>
         </div>
 
         {similar.length > 0 && (
-          <section className="mt-10" aria-labelledby="more-like-this">
-            <h2 id="more-like-this" className="mb-4 text-sm font-semibold tracking-tight">
-              More like this
-            </h2>
+          <section className="mt-12" aria-labelledby="more-like-this">
+            <div className="mb-5 flex items-center gap-3">
+              <h2
+                id="more-like-this"
+                className="font-display text-xl font-semibold tracking-tight"
+              >
+                Threads from this
+              </h2>
+              {/* Gold thread rule — the weave connecting this node to its neighbours. */}
+              <span aria-hidden="true" className="h-px flex-1 bg-accent/40" />
+            </div>
             <MasonryFeed items={similar} />
           </section>
         )}

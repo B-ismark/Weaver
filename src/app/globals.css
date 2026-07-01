@@ -1,11 +1,17 @@
 @import "tailwindcss";
 
+/* "Silk" palette — warm neutrals anchored on the orb-weaver hub gold. Retires
+   the generic zinc/white/indigo (which read as Pinterest) for a paper-and-silk
+   editorial feel. Gold is BOTH accent and focus ring, tying the whole surface
+   back to the web motif. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --surface: #f4f4f5;
-  --muted: #71717a;
-  --ring: #6366f1;
+  --background: #faf8f4; /* warm silk paper */
+  --foreground: #1a1712; /* warm near-black ink */
+  --surface: #efe9df; /* warm sand */
+  --muted: #8a8072; /* warm taupe */
+  --accent: #c9a227; /* web-hub gold */
+  --accent-soft: #e8d9a0; /* pale gold for washes/threads */
+  --ring: #c9a227;
 }
 
 @theme inline {
@@ -13,17 +19,22 @@
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
   --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
   --color-ring: var(--ring);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --surface: #18181b;
-    --muted: #a1a1aa;
+    --background: #14110c; /* deep warm charcoal */
+    --foreground: #ede8dd;
+    --surface: #221d15;
+    --muted: #9c9082;
+    --accent: #e0b737; /* gold glows a touch brighter on dark */
+    --accent-soft: #5a4a1e;
   }
 }
 
@@ -83,6 +94,23 @@ body {
   }
 }
 
+/* Staggered "weave-in" for masonry tiles on first paint (MasonryFeed). Each
+   tile fades + lifts into place; the per-tile delay is set inline. Zeroed by the
+   reduced-motion override below → tiles just appear. */
+@keyframes tile-weave-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.tile-reveal {
+  animation: tile-weave-in 480ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
 /* Shimmer for skeleton loaders (cards + search). Frozen under reduced-motion
    by the override below → degrades to a flat surface tint. */
 @keyframes weave-shimmer {
@@ -106,6 +134,38 @@ body {
   animation: weave-shimmer 1.4s ease-in-out infinite;
 }
 
+/* Lenis smooth scroll (see SmoothScroll). Recommended rules from the Lenis docs
+   so the library owns the scroll timeline without fighting native behaviour. */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+/* View Transitions (feed thumbnail → detail hero morph). The `share="morph"`
+   prop tags the transition with the `.morph` class. A short blur mid-flight
+   hides pixel interpolation as the cover-cropped thumb resolves into the
+   contain-fit hero; 380ms is long enough to read, short enough to feel direct. */
+::view-transition-group(.morph) {
+  animation-duration: 380ms;
+}
+::view-transition-image-pair(.morph) {
+  animation-name: vt-morph-blur;
+}
+@keyframes vt-morph-blur {
+  40% {
+    filter: blur(3px);
+  }
+}
+
 /* efficiency + a11y: honor reduced-motion preference. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -113,5 +173,14 @@ body {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* Directional/positional view-transition motion is the top trigger for motion
+     sensitivity — collapse every route transition to an instant swap. */
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
   }
 }

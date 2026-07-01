@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SiteHeader } from "@/components/SiteHeader";
 
 export const metadata = {
   title: "Privacy Policy · Weaver",
@@ -13,16 +13,14 @@ export const metadata = {
 export default function PrivacyPage() {
   return (
     <>
-      <header className="sticky top-0 z-10 border-b border-surface bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-semibold tracking-tight">Privacy Policy</h1>
-          <Link href="/" className="text-sm text-muted hover:text-foreground">
-            ← Feed
-          </Link>
-        </div>
-      </header>
+      {/* Public page (pre-auth Pinterest reviewers land here) — wordmark links
+          home, no nav to gate-protected pages. */}
+      <SiteHeader maxWidth="max-w-3xl" />
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
+        <h1 className="mb-6 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+          Privacy Policy
+        </h1>
         <article className="flex flex-col gap-6 text-sm leading-relaxed text-foreground">
           <p className="text-muted">Last updated: 20 June 2026</p>
 

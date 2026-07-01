@@ -31,7 +31,11 @@ export function ImportForm() {
         method: "POST",
         body: new FormData(e.currentTarget),
       });
-      setResult((await res.json()) as ImportResult);
+      const data = (await res.json()) as ImportResult;
+      setResult(data);
+      // New taste signal → recompute centroids so the feed actually shifts
+      // (was only done after Pinterest sync; manual imports left the feed stale).
+      if (data.ok && data.stored) await fetch("/api/recluster", { method: "POST" });
     } catch {
       setResult({ error: "Network error — is the dev server running?" });
     } finally {

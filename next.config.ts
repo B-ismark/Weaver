@@ -7,6 +7,12 @@ import type { NextConfig } from "next";
  *   from platform CDNs (§5). Placeholder data uses picsum during Phase 0.
  */
 const nextConfig: NextConfig = {
+  // React <ViewTransition> for native, dependency-free route animations: the
+  // feed thumbnail morphs into the detail hero (shared-element continuity).
+  // Progressive — unsupported browsers just navigate without the morph.
+  experimental: {
+    viewTransition: true,
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "*.supabase.co" }, // cached thumbnails (§5.1)

@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { MasonryFeed } from "@/components/MasonryFeed";
 import { SearchBar } from "@/components/SearchBar";
+import { SiteHeader } from "@/components/SiteHeader";
+import { PrimaryNav } from "@/components/PrimaryNav";
 import { embedQuery } from "@/lib/embedText";
 import { searchByVector } from "@/lib/items";
 
@@ -25,16 +26,12 @@ export default async function SearchPage({
 
   return (
     <>
-      <header className="sticky top-0 z-10 border-b border-surface bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
-          <Link href="/" className="text-sm text-muted hover:text-foreground">
-            ← Feed
-          </Link>
-          <SearchBar initial={term} />
-        </div>
-      </header>
+      <SiteHeader>
+        <SearchBar initial={term} />
+        <PrimaryNav />
+      </SiteHeader>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">
         {!term && <p className="text-sm text-muted">Type a query to search your images.</p>}
 
         {term && !vector && (

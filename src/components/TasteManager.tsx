@@ -22,6 +22,9 @@ export function TasteManager() {
     if (res.ok) setKeywords((await res.json()).keywords ?? []);
   }
   useEffect(() => {
+    // load() is async — setState runs after the fetch resolves, not synchronously
+    // in the effect body, so this isn't the cascading-render case the rule targets.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, []);
 
