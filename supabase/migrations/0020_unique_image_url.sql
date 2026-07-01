@@ -1,0 +1,22 @@
+-- Weaver — prevent duplicate feed items at the source.
+--
+-- Discovery deduped only by a check-then-insert on image_url (refresh.ts), which
+-- races: two overlapping sweeps (cron re-tick, or cron + a manual trigger) both
+-- pass the "already stored?" read before either commits, so both INSERT the same
+-- URL. The result was ~20% of the candidate pool being exact-URL duplicates that
+-- rank adjacently (identical embedding → identical taste score) and render side
+-- by side in the feed.
+--
+-- dedup_candidates() (0009) cleans near-dupes after the fact, but only runs at the
+-- tail of a sweep and can't keep up. The durable fix is a DB-level uniqueness
+-- guarantee so the insert is idempotent regardless of concurrency:
+--
+--   * A unique index on image_url (global — the same URL is always the same image,
+--     so it should only ever be one row, whatever its role).
+--   * refresh.ts switches INSERT → upsert(onConflict: image_url, ignoreDuplicates)
+--     so a racing duplicate is silently dropped instead of erroring the sweep.
+--
+-- Exact-URL duplicates were cleared (via dedup_candidates) before this migration,
+-- so the index builds cleanly.
+
+create unique index if not exists items_image_url_uniq on items (image_url);

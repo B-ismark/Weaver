@@ -114,9 +114,23 @@ export function MasonryFeed({
   const containerRef = useRef<HTMLDivElement>(null);
   const { cols, ready } = useColumnCount(containerRef);
 
-  // Local copy so saved/hidden tiles disappear optimistically.
+  // Local copy so saved/hidden/broken tiles disappear optimistically.
   const [removed, setRemoved] = useState<Set<string>>(() => new Set());
-  const items = useMemo(() => initial.filter((it) => !removed.has(it.id)), [initial, removed]);
+  // Dedup defensively at render by source image URL (not just id): the same image
+  // can slip in under two ids (CDN variants, a race before the unique index), and
+  // near-identical embeddings rank them adjacent — so a stray dupe would show side
+  // by side. Keep the first occurrence; id de-dup guards accidental key clashes.
+  const items = useMemo(() => {
+    const seen = new Set<string>();
+    return initial.filter((it) => {
+      if (removed.has(it.id)) return false;
+      const key = it.fullUrl || it.id;
+      if (seen.has(key) || seen.has(it.id)) return false;
+      seen.add(key);
+      seen.add(it.id);
+      return true;
+    });
+  }, [initial, removed]);
   const onResolved = (id: string) => setRemoved((prev) => new Set(prev).add(id));
 
   // AutoAnimate the grid so save/hide/discovery reflow smoothly (not jump-cut).

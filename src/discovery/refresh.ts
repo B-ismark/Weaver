@@ -69,7 +69,15 @@ export async function runDiscovery(source: CandidateSource): Promise<DiscoveryRe
 
   let stored = 0;
   if (rows.length) {
-    const { data, error } = await supabase.from("items").insert(rows).select("id");
+    // Upsert (not insert) so a URL that raced in from a concurrent sweep is
+    // dropped silently instead of erroring the batch. The image_url unique index
+    // (migration 0020) is the real dedup guarantee; the pre-insert existing-check
+    // above just trims most work before we spend embeddings. ignoreDuplicates =
+    // ON CONFLICT DO NOTHING, so .select only returns the rows actually inserted.
+    const { data, error } = await supabase
+      .from("items")
+      .upsert(rows, { onConflict: "image_url", ignoreDuplicates: true })
+      .select("id");
     if (error) throw new Error(`discovery store failed: ${error.message}`);
     stored = data?.length ?? 0;
   }

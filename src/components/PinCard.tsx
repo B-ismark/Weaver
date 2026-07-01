@@ -35,6 +35,7 @@ export function PinCard({
   onResolved?: (id: string) => void;
 }) {
   const [loaded, setLoaded] = useState(false);
+  const [errored, setErrored] = useState(false);
   const cardRef = useRef<HTMLElement>(null);
 
   // Record an impression once the tile is at least half visible, so the feed can
@@ -83,13 +84,20 @@ export function PinCard({
           className="relative w-full bg-surface"
           style={{ aspectRatio: `${item.width} / ${item.height}` }}
         >
-          {/* Shimmer skeleton until the thumb decodes — no blank flash. */}
+          {/* Shimmer skeleton until the thumb decodes — no blank flash. Stops
+              shimmering on error so a broken tile doesn't read as "loading forever"
+              in contexts that keep it (no onResolved). */}
           <div
             aria-hidden="true"
-            className={`skeleton absolute inset-0 transition-opacity duration-500 ${
+            className={`${errored ? "bg-surface" : "skeleton"} absolute inset-0 transition-opacity duration-500 ${
               loaded ? "opacity-0" : "opacity-100"
             }`}
           />
+          {errored && (
+            <div className="absolute inset-0 flex items-center justify-center p-3 text-center text-xs text-muted">
+              {item.caption || "Image unavailable"}
+            </div>
+          )}
           {/* Shared-element morph: this thumbnail is the same node as the detail
               hero (same name) — the browser animates it expanding on navigation.
               default="none" is REQUIRED: without it this ViewTransition fires its
@@ -106,6 +114,15 @@ export function PinCard({
               unoptimized={!shouldOptimize(item.thumbUrl)}
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 220px"
               onLoad={() => setLoaded(true)}
+              // A hotlinked candidate can fail in-browser (host referer block,
+              // rate-limit, decode) even when the URL is reachable server-side.
+              // Without this the tile stays a permanent black hole. Drop it from the
+              // grid (onResolved) so the feed reflows; standalone uses fall back to
+              // the caption placeholder below.
+              onError={() => {
+                setErrored(true);
+                onResolved?.(item.id);
+              }}
               className={`object-cover transition-[opacity,transform] duration-700 group-hover:scale-[1.03] ${
                 loaded ? "scale-100 opacity-100" : "scale-105 opacity-0"
               }`}

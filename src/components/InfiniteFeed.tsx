@@ -68,10 +68,15 @@ export function InfiniteFeed({ initial }: { initial: FeedItem[] }) {
       if (next.length === 0) {
         setDone(true);
       } else {
-        // Dedup defensively against anything already present.
+        // Dedup defensively against anything already present — by id AND by source
+        // image URL, since the same image can arrive under two ids (CDN variants).
         setItems((prev) => {
-          const seen = new Set(prev.map((it) => it.id));
-          return [...prev, ...next.filter((it) => !seen.has(it.id))];
+          const seenIds = new Set(prev.map((it) => it.id));
+          const seenUrls = new Set(prev.map((it) => it.fullUrl));
+          return [
+            ...prev,
+            ...next.filter((it) => !seenIds.has(it.id) && !seenUrls.has(it.fullUrl)),
+          ];
         });
         if (next.length < PAGE) setDone(true);
       }
