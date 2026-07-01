@@ -1,4 +1,5 @@
 import { runDiscovery } from "@/discovery/refresh";
+import { runDoctor } from "@/discovery/doctor";
 import { arenaSource } from "@/discovery/sources/arena";
 import { openverseSource } from "@/discovery/sources/openverse";
 import { redditSource } from "@/discovery/sources/reddit";
@@ -34,6 +35,33 @@ const SOURCES = {
   metmuseum: metmuseumSource,
   wikimedia: wikimediaSource,
 };
+
+/**
+ * GET /api/discover — the "doctor" (Agent-Reach health-check port). Pings every
+ * source (or ?sources=a,b) and reports which are ok / blocked / erroring today,
+ * WITHOUT embedding or storing. Use it to see which walls are up before a sweep.
+ */
+export async function GET(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const param = url.searchParams.get("sources");
+  const names = param ? param.split(",").map((s) => s.trim()).filter(Boolean) : Object.keys(SOURCES);
+
+  const unknown = names.filter((n) => !(n in SOURCES));
+  if (unknown.length) {
+    return Response.json(
+      { error: `Unknown source(s): ${unknown.join(", ")}. Options: ${Object.keys(SOURCES).join(", ")}` },
+      { status: 422 }
+    );
+  }
+
+  const health = await runDoctor(names.map((n) => SOURCES[n as keyof typeof SOURCES]));
+  const summary = {
+    ok: health.filter((h) => h.status === "ok").map((h) => h.source),
+    blocked: health.filter((h) => h.status === "blocked").map((h) => h.source),
+    error: health.filter((h) => h.status === "error").map((h) => h.source),
+  };
+  return Response.json({ ok: true, summary, health });
+}
 
 export async function POST(request: Request): Promise<Response> {
   let names: string[] = ["arena"];
