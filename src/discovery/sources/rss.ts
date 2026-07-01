@@ -55,19 +55,32 @@ function firstAttr(block: string, tag: string, attr: string): string | null {
   return m ? decode(m[1]) : null;
 }
 
+/**
+ * Pinterest RSS serves tiny 236px thumbnails (i.pinimg.com/236x/…). Upgrade the
+ * size bucket to 736x for a feed-worthy image (same 736x trick as the GDPR
+ * import — Pinterest transcodes to that size and it returns 200).
+ */
+function upgradePinImage(url: string): string {
+  return url.replace(/(i\.pinimg\.com)\/\d+x\//i, "$1/736x/");
+}
+
+const IMG_TAG = /<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i;
+
 function extractImage(block: string): string | null {
-  // Prefer explicit media tags, then enclosure, then the first <img> in the body.
+  // Prefer explicit media tags, then enclosure.
   const media =
     firstAttr(block, "media:content", "url") ||
     firstAttr(block, "media:thumbnail", "url") ||
     firstAttr(block, "enclosure", "url");
-  if (media && /^https?:\/\//i.test(media)) return media;
+  if (media && /^https?:\/\//i.test(media)) return upgradePinImage(media);
 
-  // <img src="..."> inside description/content (often CDATA-wrapped HTML).
-  const img = /<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i.exec(block);
+  // <img src="..."> in the body. It may be raw, CDATA-wrapped, OR (Pinterest)
+  // HTML-entity-encoded inside <description> (&lt;img src=&quot;…&quot;&gt;), so
+  // try the raw block first, then a decoded copy.
+  const img = IMG_TAG.exec(block) ?? IMG_TAG.exec(decode(block));
   if (img) {
     const url = decode(img[1]);
-    if (/^https?:\/\//i.test(url)) return url;
+    if (/^https?:\/\//i.test(url)) return upgradePinImage(url);
   }
   return null;
 }
