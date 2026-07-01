@@ -2,10 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, ViewTransition } from "react";
+import { useEffect, useRef, useState, ViewTransition } from "react";
 import type { FeedItem } from "@/lib/feed";
 import { logEngagement } from "@/lib/engagement";
 import { shouldOptimize } from "@/lib/imageHost";
+import { recordImpression } from "@/lib/impressions";
 import { ItemActions } from "./ItemActions";
 
 /**
@@ -34,9 +35,31 @@ export function PinCard({
   onResolved?: (id: string) => void;
 }) {
   const [loaded, setLoaded] = useState(false);
+  const cardRef = useRef<HTMLElement>(null);
+
+  // Record an impression once the tile is at least half visible, so the feed can
+  // stop showing it after the grace window (migration 0016 / /api/impression).
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            recordImpression(item.id);
+            io.disconnect();
+            break;
+          }
+        }
+      },
+      { threshold: 0.5 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [item.id]);
 
   return (
-    <article className="group relative overflow-hidden rounded-lg">
+    <article ref={cardRef} className="group relative overflow-hidden rounded-lg">
       {/* Actions overlay — visible on hover, and whenever focused (keyboard). */}
       {showActions && (
         <div className="absolute right-2 top-2 z-20 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">

@@ -12,9 +12,13 @@ deployed cron endpoints. The repo must live on GitHub (the cron needs it).
   - `0013_artic_platform.sql`, `0014_museum_platforms.sql` — allow the new
     keyless discovery sources (Art Institute of Chicago, The Met, Wikimedia).
   - `0015_feed_score.sql` — redefines `feed_by_taste` / `items_like` to also
-    return the raw cosine **taste-match score**, which the UI renders as the
-    per-tile gold "match" thread. Return-type change, so it drops + recreates
-    both functions — apply it as-is.
+    return the raw cosine **taste-match score**. Return-type change, so it drops
+    + recreates both functions — apply it as-is.
+  - `0016_seen_and_negative.sql` — adds `seen_at` (impression exclusion: content
+    you've already scrolled past drops out of the feed after a 6h grace window)
+    and a negative **hide** signal (candidates similar to anything you hid are
+    suppressed). Redefines `feed_by_taste` again (drop + recreate). Requires the
+    `/api/impression` endpoint, which ships with the app.
   - `0008_oauth_tokens.sql` is only needed for the Pinterest **OAuth** flow —
     skip if using a manual `PINTEREST_ACCESS_TOKEN`.
 - `.env.local` is gitignored (`.env*`) — secrets will **not** be committed.
