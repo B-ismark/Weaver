@@ -57,7 +57,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
                 <h1 className="font-display text-2xl font-medium leading-snug">{item.caption}</h1>
               )}
               <SourceOutLink itemId={item.id} href={item.sourceLink} platform={item.platform} />
-              <ItemActions itemId={item.id} sourceLink={item.sourceLink} caption={item.caption} variant="bar" />
+              <ItemActions itemId={item.id} sourceLink={item.sourceLink} caption={item.caption} variant="bar" initialLiked={item.saved} />
             </aside>
           </Reveal>
         </div>

@@ -151,18 +151,42 @@ html.lenis body {
 }
 
 /* View Transitions (feed thumbnail → detail hero morph). The `share="morph"`
-   prop tags the transition with the `.morph` class. A short blur mid-flight
-   hides pixel interpolation as the cover-cropped thumb resolves into the
-   contain-fit hero; 380ms is long enough to read, short enough to feel direct. */
+   prop tags the transition with the `.morph` class.
+
+   The morph should read as ONE image growing, not a swap. So:
+   - the group (geometry: size + position) eases over 520ms with a smooth
+     standard-curve, long enough to track the growth;
+   - the old/new image pair CROSS-FADES over the same window (instead of the old
+     snapshot vanishing early and the new one popping in) so the low-res thumb
+     dissolves into the full-res hero seamlessly;
+   - a blur peaks mid-flight to hide both the resolution jump and any cover→
+     contain reframing while the geometry is still moving. */
 ::view-transition-group(.morph) {
-  animation-duration: 380ms;
+  animation-duration: 520ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+::view-transition-old(.morph),
+::view-transition-new(.morph) {
+  animation-duration: 520ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  /* both snapshots occupy the group box and cross-fade over the full morph */
+  mix-blend-mode: normal;
+  height: 100%;
 }
 ::view-transition-image-pair(.morph) {
   animation-name: vt-morph-blur;
+  animation-duration: 520ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 @keyframes vt-morph-blur {
-  40% {
-    filter: blur(3px);
+  0% {
+    filter: blur(0);
+  }
+  45% {
+    filter: blur(6px);
+  }
+  100% {
+    filter: blur(0);
   }
 }
 

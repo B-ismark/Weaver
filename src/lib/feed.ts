@@ -19,8 +19,12 @@ export interface FeedItem {
   height: number;
   // Taste-match strength in [0,1] (cosine), when the source RPC provides it
   // (feed_by_taste / items_like after migration 0015). Undefined for recency/
-  // library reads or before the migration is applied — UI treats it as optional.
+  // library reads or before the migration is applied; UI treats it as optional.
   score?: number;
+  // True when the item is already in the taste set (role='taste'), i.e. saved/
+  // liked. Lets the like heart render its persisted state instead of always
+  // starting empty. Only present on direct table reads (detail/library).
+  saved?: boolean;
 }
 
 /**

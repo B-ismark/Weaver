@@ -73,18 +73,34 @@ function silkBurst(host: HTMLElement | null) {
   }
 }
 
-/** Quick lateral shake — the thread being snipped. */
-function snip(el: Element | null) {
-  if (!el || reduceMotion()) return;
-  el.animate(
+/**
+ * Snip: the two scissor arms pivot about the rivet (12,12 in the icon's viewBox)
+ * and close toward each other twice, like blades cutting a thread. Each arm is a
+ * <g> with transform-box:view-box so the rotation origin is in icon coordinates.
+ */
+function snip(armA: SVGGElement | null, armB: SVGGElement | null) {
+  if (reduceMotion()) return;
+  const close = 15;
+  const opts = { duration: 440, easing: "ease-in-out" } as const;
+  armA?.animate(
     [
-      { transform: "translateX(0) rotate(0)" },
-      { transform: "translateX(-2px) rotate(-12deg)" },
-      { transform: "translateX(2px) rotate(10deg)" },
-      { transform: "translateX(-1px) rotate(-4deg)" },
-      { transform: "translateX(0) rotate(0)" },
+      { transform: "rotate(0deg)" },
+      { transform: `rotate(-${close}deg)` },
+      { transform: "rotate(0deg)" },
+      { transform: `rotate(-${close}deg)` },
+      { transform: "rotate(0deg)" },
     ],
-    { duration: 300, easing: "ease-in-out" }
+    opts
+  );
+  armB?.animate(
+    [
+      { transform: "rotate(0deg)" },
+      { transform: `rotate(${close}deg)` },
+      { transform: "rotate(0deg)" },
+      { transform: `rotate(${close}deg)` },
+      { transform: "rotate(0deg)" },
+    ],
+    opts
   );
 }
 
@@ -93,21 +109,26 @@ export function ItemActions({
   sourceLink,
   caption,
   variant = "overlay",
+  initialLiked = false,
   onResolved,
 }: {
   itemId: string;
   sourceLink: string;
   caption?: string;
   variant?: "overlay" | "bar";
+  // Persisted like state from the server (item is in the taste set). Seeds the
+  // heart so a like made on one view shows as liked on another.
+  initialLiked?: boolean;
   onResolved?: (id: string) => void;
 }) {
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(initialLiked);
   const [hiding, setHiding] = useState(false);
   const [shared, setShared] = useState<"" | "copied">("");
   const saveRef = useRef<HTMLButtonElement>(null);
   const hideRef = useRef<HTMLButtonElement>(null);
   const saveIcon = useRef<SVGSVGElement>(null);
-  const hideIcon = useRef<SVGSVGElement>(null);
+  const hideArmA = useRef<SVGGElement>(null);
+  const hideArmB = useRef<SVGGElement>(null);
 
   // Like is a TOGGLE and does NOT remove the tile — so you can unlike, and
   // search results don't vanish when you like them. (Liked candidates leave the
@@ -132,7 +153,7 @@ export function ItemActions({
   function onHide() {
     if (hiding) return;
     setHiding(true);
-    snip(hideIcon.current);
+    snip(hideArmA.current, hideArmB.current);
     haptic([8, 30, 8]);
     logEngagement(itemId, "dismiss");
     signal(itemId, "hide").catch(() => {});
@@ -191,7 +212,7 @@ export function ItemActions({
         {isBar && (liked ? "Liked" : "Like")}
       </button>
 
-      {/* Not my taste — snip the thread */}
+      {/* Not my taste: the scissor blades snip */}
       <button
         ref={hideRef}
         type="button"
@@ -202,7 +223,6 @@ export function ItemActions({
         className={base}
       >
         <svg
-          ref={hideIcon}
           width={sz}
           height={sz}
           viewBox="0 0 24 24"
@@ -213,11 +233,18 @@ export function ItemActions({
           strokeLinejoin="round"
           aria-hidden="true"
         >
-          <circle cx="6" cy="6" r="3" />
-          <circle cx="6" cy="18" r="3" />
-          <line x1="20" y1="4" x2="8.12" y2="15.88" />
-          <line x1="14.47" y1="14.48" x2="20" y2="20" />
-          <line x1="8.12" y1="8.12" x2="12" y2="12" />
+          {/* Arm A: top handle + connector + lower-right blade. Pivots about the
+              rivet (12,12); view-box transform-box keeps the origin in icon coords. */}
+          <g ref={hideArmA} style={{ transformBox: "view-box", transformOrigin: "12px 12px" }}>
+            <circle cx="6" cy="6" r="3" />
+            <line x1="8.12" y1="8.12" x2="12" y2="12" />
+            <line x1="14.47" y1="14.48" x2="20" y2="20" />
+          </g>
+          {/* Arm B: bottom handle + upper-right blade. */}
+          <g ref={hideArmB} style={{ transformBox: "view-box", transformOrigin: "12px 12px" }}>
+            <circle cx="6" cy="18" r="3" />
+            <line x1="20" y1="4" x2="8.12" y2="15.88" />
+          </g>
         </svg>
         {isBar && "Not my taste"}
       </button>

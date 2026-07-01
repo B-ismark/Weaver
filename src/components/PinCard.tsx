@@ -44,6 +44,7 @@ export function PinCard({
             itemId={item.id}
             sourceLink={item.sourceLink}
             caption={item.caption}
+            initialLiked={item.saved}
             onResolved={onResolved}
           />
         </div>

@@ -12,7 +12,7 @@ const DEFAULT_THUMB_W = 400;
 const DEFAULT_THUMB_H = 500;
 
 const ITEM_COLUMNS =
-  "id, platform, image_url, thumb_url, thumb_width, thumb_height, source_link, caption";
+  "id, platform, image_url, thumb_url, thumb_width, thumb_height, source_link, caption, role";
 
 type ItemRow = {
   id: string;
@@ -23,6 +23,7 @@ type ItemRow = {
   thumb_height: number | null;
   source_link: string;
   caption: string | null;
+  role?: string | null; // 'taste' = in the taste set (saved/liked); 'candidate' = discovered
   score?: number | null; // present from feed_by_taste / items_like (migration 0015)
 };
 
@@ -38,6 +39,8 @@ function rowToFeedItem(row: ItemRow): FeedItem {
     height: row.thumb_height ?? DEFAULT_THUMB_H,
     // Only carry a real number through; the RPC returns it post-0015, absent before.
     score: typeof row.score === "number" ? row.score : undefined,
+    // Saved/liked = already in the taste set. Absent from RPC rows (treated false).
+    saved: row.role === "taste",
   };
 }
 
