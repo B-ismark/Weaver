@@ -1,5 +1,6 @@
 import { getServerSupabase } from "@/lib/supabase/server";
 import { parsePgVector } from "@/lib/kmeans";
+import { pullTowardCentroid, softSteerCentroid } from "@/lib/tasteSteer";
 
 /**
  * POST /api/signal — explicit feedback on a feed item (discovery spec §9).
@@ -10,50 +11,25 @@ import { parsePgVector } from "@/lib/kmeans";
  *                corrected by the next full re-cluster).
  *   - "hide"   : negative ("not my taste"). Excluded from the feed.
  *   - "unhide" : reverse a hide.
+ *   - "more"   : SOFT positive. Nudge the nearest centroid a small step TOWARD the
+ *                item — steers the feed without promoting the item or removing the
+ *                tile. Cheaper than a save, richer than nothing.
+ *   - "less"   : SOFT negative. Nudge the nearest centroid a small step AWAY from
+ *                the item — steers the feed off that style without hiding the tile
+ *                or hard-suppressing everything similar (what "hide" does).
  *
  * Also logs an engagement event for the (parked) learned ranker.
  */
-type Action = "save" | "unsave" | "hide" | "unhide";
+type Action = "save" | "unsave" | "hide" | "unhide" | "more" | "less";
 
-/**
- * Move the nearest centroid a step toward a newly-saved embedding (running mean
- * proxy). O(k) — cheap per save. Drift is corrected by the periodic full
- * re-cluster. No-op if there are no centroids yet.
- */
-async function nudgeCentroid(
+/** Read an item's embedding as a number[], or null. */
+async function itemVector(
   supabase: ReturnType<typeof getServerSupabase>,
   itemId: string
-): Promise<void> {
-  const { data: item } = await supabase.from("items").select("embedding").eq("id", itemId).single();
-  if (!item?.embedding) return;
-  const vec = parsePgVector(item.embedding as string);
-
-  const { data: centroids } = await supabase.from("taste_centroids").select("id, centroid, size");
-  if (!centroids?.length) return;
-
-  let best = centroids[0];
-  let bestSim = -Infinity;
-  let bestVec: number[] = [];
-  for (const c of centroids) {
-    const cv = parsePgVector(c.centroid as string);
-    let dot = 0;
-    for (let i = 0; i < vec.length; i++) dot += vec[i] * cv[i]; // both unit → cosine
-    if (dot > bestSim) {
-      bestSim = dot;
-      best = c;
-      bestVec = cv;
-    }
-  }
-
-  const size = (best.size as number) ?? 1;
-  const merged = bestVec.map((x, i) => (x * size + vec[i]) / (size + 1));
-  const norm = Math.sqrt(merged.reduce((s, x) => s + x * x, 0)) || 1;
-  const unit = merged.map((x) => x / norm);
-
-  await supabase
-    .from("taste_centroids")
-    .update({ centroid: `[${unit.join(",")}]`, size: size + 1 })
-    .eq("id", best.id);
+): Promise<number[] | null> {
+  const { data } = await supabase.from("items").select("embedding").eq("id", itemId).single();
+  if (!data?.embedding) return null;
+  return parsePgVector(data.embedding as string);
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -68,6 +44,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const supabase = getServerSupabase();
 
+  // Row patch for the hard actions. Soft actions (more/less) don't touch the row.
   const patch =
     action === "save"
       ? { role: "taste", promoted: true, hidden: false }
@@ -78,18 +55,37 @@ export async function POST(request: Request): Promise<Response> {
           : action === "unhide"
             ? { hidden: false }
             : null;
-  if (!patch) return Response.json({ error: `unknown action ${action}` }, { status: 422 });
 
-  const { error } = await supabase.from("items").update(patch).eq("id", itemId);
-  if (error) return Response.json({ error: error.message }, { status: 500 });
+  const isSoft = action === "more" || action === "less";
+  if (!patch && !isSoft) {
+    return Response.json({ error: `unknown action ${action}` }, { status: 422 });
+  }
 
-  // Save → nudge taste toward it so the feed sharpens immediately.
-  if (action === "save") await nudgeCentroid(supabase, itemId).catch(() => {});
+  if (patch) {
+    const { error } = await supabase.from("items").update(patch).eq("id", itemId);
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+  }
 
-  // best-effort engagement log (save → save, hide → dismiss)
-  const evType = action === "save" ? "save" : action === "hide" ? "dismiss" : null;
+  // Taste steering:
+  //   save → running-mean pull (strong).  more/less → fractional soft steer.
+  if (action === "save" || action === "more" || action === "less") {
+    const vec = await itemVector(supabase, itemId).catch(() => null);
+    if (vec) {
+      if (action === "save") await pullTowardCentroid(supabase, vec).catch(() => {});
+      else await softSteerCentroid(supabase, vec, action === "more" ? 1 : -1).catch(() => {});
+    }
+  }
+
+  // best-effort engagement log for the parked ranker (soft signals weighted 0.3).
+  const evType =
+    action === "save" || action === "more"
+      ? "save"
+      : action === "hide" || action === "less"
+        ? "dismiss"
+        : null;
   if (evType) {
-    await supabase.from("engagement_events").insert({ item_id: itemId, type: evType }).then(
+    const value = isSoft ? 0.3 : 1;
+    await supabase.from("engagement_events").insert({ item_id: itemId, type: evType, value }).then(
       () => {},
       () => {}
     );

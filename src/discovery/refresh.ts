@@ -64,6 +64,7 @@ export async function runDiscovery(source: CandidateSource): Promise<DiscoveryRe
       source_link: c.sourceLink,
       caption: c.caption,
       embedding: toPgVector(r!.embedding),
+      aesthetic: r!.aesthetic, // LAION quality score (null if Space head unavailable)
     }));
 
   let stored = 0;

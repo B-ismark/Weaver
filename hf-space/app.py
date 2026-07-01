@@ -19,11 +19,13 @@ embedding pipeline.
 import io
 import os
 from urllib.parse import urlsplit
+from urllib.request import urlopen
 
 import numpy as np
 import open_clip
 import requests
 import torch
+import torch.nn as nn
 from fastapi import FastAPI, Header, HTTPException
 from PIL import Image
 from pydantic import BaseModel
@@ -37,12 +39,41 @@ FETCH_UA = (
     "(KHTML, like Gecko) Chrome/120 Safari/537.36"
 )
 
+# LAION aesthetic predictor — a single Linear(512, 1) head trained on top of
+# CLIP ViT-B/32 embeddings (the SAME vectors we already compute), so quality
+# scoring is nearly free: no second model, no extra image fetch/decode. Output is
+# roughly the AVA 1..10 aesthetic scale. Weights are the original LAION linear
+# predictor for vit_b_32. If the download fails at startup, aesthetic scoring is
+# simply disabled (the API returns null and the feed treats it as neutral).
+AESTHETIC_URLS = [
+    "https://raw.githubusercontent.com/LAION-AI/aesthetic-predictor/main/sa_0_4_vit_b_32_linear.pth",
+    "https://github.com/LAION-AI/aesthetic-predictor/raw/main/sa_0_4_vit_b_32_linear.pth",
+]
+
 app = FastAPI(title="Weaver OpenCLIP encoder")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model, _, preprocess = open_clip.create_model_and_transforms(MODEL_NAME, pretrained=PRETRAINED)
 model = model.to(device).eval()
 tokenizer = open_clip.get_tokenizer(MODEL_NAME)
+
+
+def _load_aesthetic_head() -> nn.Module | None:
+    """Load the LAION linear aesthetic head for ViT-B/32 (512-dim). None on failure."""
+    head = nn.Linear(512, 1)
+    for url in AESTHETIC_URLS:
+        try:
+            with urlopen(url, timeout=30) as resp:  # noqa: S310 — fixed trusted URLs
+                state = torch.load(io.BytesIO(resp.read()), map_location="cpu")
+            head.load_state_dict(state)
+            head = head.to(device).eval()
+            return head
+        except Exception:  # noqa: BLE001 — any failure → scoring disabled
+            continue
+    return None
+
+
+aesthetic_head = _load_aesthetic_head()
 
 
 def _check_auth(authorization: str | None) -> None:
@@ -60,7 +91,7 @@ class ImageRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "device": device}
+    return {"ok": True, "device": device, "aesthetic": aesthetic_head is not None}
 
 
 @app.post("/embed")
@@ -107,13 +138,18 @@ def embed_image(req: ImageRequest, authorization: str | None = Header(default=No
             pass
 
     out: list[list[float] | None] = [None] * len(urls)
+    aesthetics: list[float | None] = [None] * len(urls)
     if tensors:
         batch = torch.stack(tensors).to(device)
         with torch.no_grad():
             feats = model.encode_image(batch)
             feats = feats / feats.norm(dim=-1, keepdim=True)
-        feats = feats.cpu().numpy().astype(np.float32)
-        for slot, vec in zip(slots, feats):
-            out[slot] = vec.tolist()
+            # Aesthetic score off the SAME normalized embedding (near-free).
+            aes = aesthetic_head(feats).squeeze(-1).cpu().numpy() if aesthetic_head else None
+        feats_np = feats.cpu().numpy().astype(np.float32)
+        for k, slot in enumerate(slots):
+            out[slot] = feats_np[k].tolist()
+            if aes is not None:
+                aesthetics[slot] = float(aes[k])
 
-    return {"embeddings": out, "dims": dims}
+    return {"embeddings": out, "dims": dims, "aesthetics": aesthetics}

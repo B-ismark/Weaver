@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "discover": "node --conditions=react-server --import tsx scripts/discover.ts",
+    "ingest:gallerydl": "node --conditions=react-server --import tsx scripts/gallerydl-ingest.ts"
   },
   "dependencies": {
     "@formkit/auto-animate": "^0.9.0",
@@ -20,6 +22,7 @@
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "server-only": "^0.0.1",
     "sharp": "^0.35.2",
     "undici": "^7.28.0"
   },
@@ -31,6 +34,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
+    "tsx": "^4.19.2",
     "typescript": "^5"
   }
 }

@@ -15,6 +15,9 @@ export interface EmbedResult {
   embedding: number[];
   width: number;
   height: number;
+  // LAION aesthetic score (~1..10) from the Space, when its head is loaded.
+  // null when scoring is unavailable → callers store null (feed treats it neutral).
+  aesthetic: number | null;
 }
 
 export async function embedImages(urls: string[]): Promise<(EmbedResult | null)[]> {
@@ -42,13 +45,25 @@ export async function embedImages(urls: string[]): Promise<(EmbedResult | null)[
       const data = (await res.json()) as {
         embeddings?: (number[] | null)[];
         dims?: ([number, number] | null)[];
+        aesthetics?: (number | null)[];
       };
       const vecs = data.embeddings ?? [];
       const dims = data.dims ?? [];
+      const aes = data.aesthetics ?? [];
       for (let j = 0; j < batch.length; j++) {
         const v = vecs[j];
         const d = dims[j];
-        results.push(v ? { embedding: v, width: d?.[0] ?? 0, height: d?.[1] ?? 0 } : null);
+        const a = aes[j];
+        results.push(
+          v
+            ? {
+                embedding: v,
+                width: d?.[0] ?? 0,
+                height: d?.[1] ?? 0,
+                aesthetic: typeof a === "number" ? a : null,
+              }
+            : null
+        );
       }
     } catch {
       results.push(...batch.map(() => null));

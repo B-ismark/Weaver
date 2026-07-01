@@ -7,6 +7,7 @@ import { MasonryFeed } from "@/components/MasonryFeed";
 import { AppHeader } from "@/components/AppHeader";
 import { SourceOutLink } from "@/components/SourceOutLink";
 import { ItemActions } from "@/components/ItemActions";
+import { TasteNudge } from "@/components/TasteNudge";
 import { BackButton } from "@/components/BackButton";
 import { SkeletonFeed } from "@/components/SkeletonFeed";
 import { Reveal } from "@/components/motion/Reveal";
@@ -67,6 +68,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
               )}
               <SourceOutLink itemId={item.id} href={item.sourceLink} platform={item.platform} />
               <ItemActions itemId={item.id} sourceLink={item.sourceLink} caption={item.caption} variant="bar" initialLiked={item.saved} />
+              <TasteNudge itemId={item.id} />
             </aside>
           </Reveal>
         </div>

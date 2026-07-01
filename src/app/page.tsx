@@ -1,6 +1,6 @@
-import { MasonryFeed } from "@/components/MasonryFeed";
+import { InfiniteFeed } from "@/components/InfiniteFeed";
 import { AppHeader } from "@/components/AppHeader";
-import { DiscoverButton } from "@/components/DiscoverButton";
+import { Onboarding } from "@/components/Onboarding";
 import { Reveal } from "@/components/motion/Reveal";
 import { getFeedItems } from "@/lib/items";
 
@@ -27,16 +27,9 @@ export default async function HomePage() {
         </Reveal>
 
         {items.length === 0 ? (
-          <div className="mx-auto max-w-prose py-16 text-center">
-            <h2 className="font-display text-xl font-medium">No discoveries yet</h2>
-            <p className="mt-2 text-sm text-muted">
-              Weaver learns your taste from what you&apos;ve imported, then surfaces{" "}
-              <em>new</em> content you haven&apos;t seen. Run a discovery refresh to fill the feed.
-            </p>
-            <DiscoverButton />
-          </div>
+          <Onboarding />
         ) : (
-          <MasonryFeed items={items} />
+          <InfiniteFeed initial={items} />
         )}
       </main>
     </>

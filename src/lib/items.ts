@@ -53,39 +53,82 @@ function client() {
 }
 
 /**
- * Feed tuning knobs (migration 0016), overridable via env without a redeploy of
- * the SQL. Omitted keys fall back to the function's SQL defaults (6h / 0.85).
- *   FEED_SEEN_GRACE_HOURS — how long a seen candidate stays eligible.
+ * Feed tuning knobs (migrations 0016 + 0017), overridable via env without a
+ * redeploy of the SQL. Omitted keys fall back to the function's SQL defaults.
+ *   FEED_SEEN_GRACE_HOURS — how long a seen candidate stays eligible (6h).
  *   FEED_HIDE_SIMILARITY  — cosine above which a candidate is suppressed as
- *                           "like" something you hid.
+ *                           "like" something you hid (0.85).
+ *   FEED_MIN_AESTHETIC    — hard quality floor 0..10 (0 = off). Drops known-low
+ *                           images; never drops un-scored (NULL) rows.
  */
 function feedTuning(): Record<string, number> {
   const params: Record<string, number> = {};
   const grace = Number(process.env.FEED_SEEN_GRACE_HOURS);
   const hideSim = Number(process.env.FEED_HIDE_SIMILARITY);
+  const minAes = Number(process.env.FEED_MIN_AESTHETIC);
   if (Number.isFinite(grace)) params.seen_grace_hours = grace;
   if (Number.isFinite(hideSim)) params.hide_similarity = hideSim;
+  if (Number.isFinite(minAes)) params.min_aesthetic = minAes;
   return params;
 }
 
-/** Home feed: taste-ranked when possible, recency otherwise. */
-export async function getFeedItems(limit = 60): Promise<FeedItem[]> {
+// A seen candidate is eligible again after this many hours (matches the SQL
+// default). The adaptive backfill below relaxes it to "effectively forever" so a
+// power-user who out-scrolls the fresh supply still gets a full page instead of a
+// half-empty one — freshness is preferred, but never at the cost of an empty feed.
+const FOREVER_HOURS = 1_000_000;
+
+/**
+ * Home / infinite-scroll feed: taste-ranked when possible, recency otherwise.
+ *
+ * @param limit   page size.
+ * @param exclude ids already shown THIS session (for "load more" — the SQL skips
+ *                them so pages don't repeat despite the per-call randomisation).
+ */
+export async function getFeedItems(limit = 60, exclude: string[] = []): Promise<FeedItem[]> {
   const supabase = client();
   if (!supabase) return [];
 
-  // Try taste ranking first (returns [] when no centroids yet).
-  const ranked = await supabase.rpc("feed_by_taste", { match_count: limit, ...feedTuning() });
-  if (!ranked.error && ranked.data?.length) {
-    return (ranked.data as ItemRow[]).map(rowToFeedItem);
+  const base = { match_count: limit, exclude_ids: exclude, ...feedTuning() };
+
+  // Try taste ranking, preferring fresh (unseen) candidates.
+  const ranked = await supabase.rpc("feed_by_taste", base);
+  let rows: ItemRow[] = !ranked.error && ranked.data ? (ranked.data as ItemRow[]) : [];
+
+  // DECOUPLE FRESHNESS FROM SUPPLY: if the fresh pool can't fill the page, top up
+  // from the seen pool (grace relaxed) rather than showing a stub. Only when the
+  // caller didn't override the grace window explicitly.
+  if (rows.length < limit && process.env.FEED_SEEN_GRACE_HOURS === undefined) {
+    const seenIds = new Set(rows.map((r) => String(r.id)));
+    const fill = await supabase.rpc("feed_by_taste", {
+      ...base,
+      match_count: limit,
+      seen_grace_hours: FOREVER_HOURS,
+      exclude_ids: [...exclude, ...seenIds],
+    });
+    if (!fill.error && fill.data) {
+      for (const r of fill.data as ItemRow[]) {
+        if (rows.length >= limit) break;
+        if (!seenIds.has(String(r.id))) {
+          rows.push(r);
+          seenIds.add(String(r.id));
+        }
+      }
+    }
   }
 
+  if (rows.length) return rows.map(rowToFeedItem);
+
+  // No centroids yet (cold start) → recency.
   const recent = await supabase
     .from("items")
     .select(ITEM_COLUMNS)
     .order("engaged_at", { ascending: false })
     .limit(limit);
   if (recent.error || !recent.data) return [];
-  return (recent.data as ItemRow[]).map(rowToFeedItem);
+  rows = recent.data as ItemRow[];
+  if (exclude.length) rows = rows.filter((r) => !exclude.includes(String(r.id)));
+  return rows.map(rowToFeedItem);
 }
 
 /** Library: your taste set — imported + saved/promoted items (already "seen"). */

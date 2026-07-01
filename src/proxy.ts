@@ -15,7 +15,7 @@ import { SESSION_COOKIE, expectedToken } from "@/lib/auth";
  * routes no longer self-check the secret — proxy does it here.
  */
 const PUBLIC = ["/login", "/privacy", "/api/auth/login", "/api/pinterest/callback"];
-const CRON_PATHS = ["/api/discover", "/api/pinterest/sync"];
+const CRON_PATHS = ["/api/discover", "/api/pinterest/sync", "/api/recluster"];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`));
