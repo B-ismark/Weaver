@@ -12,6 +12,7 @@ import { nasaSource } from "@/discovery/sources/nasa";
 import { europeanaSource } from "@/discovery/sources/europeana";
 import { smithsonianSource } from "@/discovery/sources/smithsonian";
 import { rssSource } from "@/discovery/sources/rss";
+import { pinterestDiscoverSource } from "@/discovery/sources/pinterestDiscover";
 import { getServerSupabase } from "@/lib/supabase/server";
 // Auth is enforced in proxy.ts (session cookie, or CRON_SECRET bearer for the
 // scheduled job) — no in-route guard needed.
@@ -44,6 +45,7 @@ const SOURCES = {
   europeana: europeanaSource, // needs EUROPEANA_KEY (else yields nothing)
   smithsonian: smithsonianSource, // needs SMITHSONIAN_API_KEY (else yields nothing)
   rss: rssSource, // needs RSS_FEEDS (Pinterest board / Reddit / blog feeds; else nothing)
+  "pinterest-discover": pinterestDiscoverSource, // DuckDuckGo → similar Pinterest feeds (no key)
 };
 
 /**

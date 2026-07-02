@@ -29,6 +29,7 @@ import { nasaSource } from "@/discovery/sources/nasa";
 import { europeanaSource } from "@/discovery/sources/europeana";
 import { smithsonianSource } from "@/discovery/sources/smithsonian";
 import { rssSource } from "@/discovery/sources/rss";
+import { pinterestDiscoverSource } from "@/discovery/sources/pinterestDiscover";
 import { getServerSupabase } from "@/lib/supabase/server";
 
 const SOURCES: Record<string, CandidateSource> = {
@@ -44,6 +45,7 @@ const SOURCES: Record<string, CandidateSource> = {
   europeana: europeanaSource,
   smithsonian: smithsonianSource,
   rss: rssSource,
+  "pinterest-discover": pinterestDiscoverSource,
 };
 
 // Default sweep = the keyless / open sources (key-gated ones no-op without a key,

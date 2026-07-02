@@ -98,7 +98,7 @@ function extractLink(block: string): string | null {
   return inner ? stripTags(inner) : null;
 }
 
-function parseFeed(xml: string): CandidateItem[] {
+function parseFeed(xml: string, sourceLabel: string): CandidateItem[] {
   const out: CandidateItem[] = [];
   // Match both RSS <item> and Atom <entry>.
   const blocks = xml.match(/<(item|entry)\b[\s\S]*?<\/(item|entry)>/gi) ?? [];
@@ -113,13 +113,13 @@ function parseFeed(xml: string): CandidateItem[] {
       imageUrl: image,
       sourceLink: link || image,
       caption: (titleRaw ? stripTags(titleRaw) : "").slice(0, 300),
-      source: "rss",
+      source: sourceLabel,
     });
   }
   return out;
 }
 
-async function pullFeed(url: string): Promise<CandidateItem[]> {
+async function pullFeed(url: string, sourceLabel: string): Promise<CandidateItem[]> {
   const xml = await fetchTextResilient(url, {
     headers: {
       "User-Agent": "weaver-personal-aggregator/0.1 (+rss)",
@@ -127,15 +127,26 @@ async function pullFeed(url: string): Promise<CandidateItem[]> {
     },
   });
   if (!xml) return [];
-  return parseFeed(xml);
+  return parseFeed(xml, sourceLabel);
+}
+
+/**
+ * Pull + parse a list of feed URLs in parallel, tagging items with `sourceLabel`.
+ * Shared by the static `rssSource` (env-configured feeds) and the dynamic
+ * `pinterestDiscoverSource` (feeds harvested from search). A feed that fails to
+ * fetch degrades to [] so one dead URL never sinks the batch.
+ */
+export async function pullFeeds(urls: string[], sourceLabel = "rss"): Promise<CandidateItem[]> {
+  if (!urls.length) return [];
+  const batches = await Promise.all(
+    urls.map((u) => pullFeed(u, sourceLabel).catch(() => [] as CandidateItem[]))
+  );
+  return batches.flat();
 }
 
 export const rssSource: CandidateSource = {
   name: "rss",
   async pull(): Promise<CandidateItem[]> {
-    const urls = feeds();
-    if (!urls.length) return []; // no feeds configured → skip
-    const batches = await Promise.all(urls.map((u) => pullFeed(u).catch(() => [] as CandidateItem[])));
-    return batches.flat();
+    return pullFeeds(feeds(), "rss"); // no feeds configured → []
   },
 };
