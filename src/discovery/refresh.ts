@@ -38,10 +38,17 @@ export async function runDiscovery(source: CandidateSource): Promise<DiscoveryRe
   for (const c of pulled) if (!byUrl.has(c.imageUrl)) byUrl.set(c.imageUrl, c);
   const urls = [...byUrl.keys()];
 
+  // Batch small: image_url can be 300+ chars, and `.in()` encodes the whole slice
+  // into the GET query string — 200 URLs blew past PostgREST's URL-length limit, so
+  // the request errored, the error was swallowed, `existing` stayed empty, and every
+  // re-run re-embedded already-stored URLs (the unique index then dropped them at
+  // insert → "fresh N, stored 0"). 30 keeps the query well under the limit; a failed
+  // batch now throws instead of silently disabling dedup.
   const existing = new Set<string>();
-  for (let i = 0; i < urls.length; i += 200) {
-    const slice = urls.slice(i, i + 200);
-    const { data } = await supabase.from("items").select("image_url").in("image_url", slice);
+  for (let i = 0; i < urls.length; i += 30) {
+    const slice = urls.slice(i, i + 30);
+    const { data, error } = await supabase.from("items").select("image_url").in("image_url", slice);
+    if (error) throw new Error(`existing-check failed: ${error.message}`);
     for (const r of data ?? []) existing.add(r.image_url);
   }
   const fresh = [...byUrl.values()].filter((c) => !existing.has(c.imageUrl)).slice(0, EMBED_CAP);
