@@ -1,34 +1,25 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { useCallback } from "react";
 import { hideItem } from "./hiddenStore";
 import { sendSignal } from "./signals";
 import { logEngagement } from "./engagement";
-import { requestFeedRefresh } from "./feedRefresh";
 
 /**
  * The one "not my taste" action, shared by the overlay button and the long-press
- * menu. It:
+ * menu. It removes ONLY the tapped tile and remembers it:
  *   1. adds the id to the session hidden store (so the tile stays gone across
- *      client navigation — see hiddenStore),
- *   2. logs the dismiss + POSTs the hide signal, and
- *   3. on the HOME feed, reshuffles the already-loaded cards (requestFeedRefresh)
- *      so the wall doesn't look stale after a card vanishes — no re-fetch, no
- *      scroll jump. The reshuffle also drops any cards liked this session.
+ *      client navigation — see hiddenStore); the grid reflows around the gap,
+ *   2. logs the dismiss + POSTs the hide signal so the server suppresses it (and
+ *      things like it) on the next fetch.
  *
- * The caller still owns the tile-collapse animation / onResolved timing.
+ * It deliberately does NOT reorder or re-fetch the rest of the feed — hiding one
+ * card shouldn't disturb the others. The caller owns the collapse animation.
  */
 export function useHideItem() {
-  const pathname = usePathname();
-
-  return useCallback(
-    (itemId: string) => {
-      hideItem(itemId);
-      logEngagement(itemId, "dismiss");
-      sendSignal(itemId, "hide").catch(() => {});
-      if (pathname === "/") requestFeedRefresh();
-    },
-    [pathname]
-  );
+  return useCallback((itemId: string) => {
+    hideItem(itemId);
+    logEngagement(itemId, "dismiss");
+    sendSignal(itemId, "hide").catch(() => {});
+  }, []);
 }

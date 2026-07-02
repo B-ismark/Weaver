@@ -4,19 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FeedItem } from "@/lib/feed";
 import { MasonryFeed } from "./MasonryFeed";
 import { DiscoverButton } from "./DiscoverButton";
-import { useFeedRefreshNonce } from "@/lib/feedRefresh";
 import { getLikedIds } from "@/lib/likedStore";
-import { isHidden } from "@/lib/hiddenStore";
-
-/** Fisher–Yates shuffle → a fresh, non-repeating order without mutating input. */
-function shuffle<T>(arr: T[]): T[] {
-  const out = arr.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
 
 /**
  * Infinite-scroll wrapper around the masonry grid.
@@ -40,8 +28,18 @@ const PAGE = 30;
 // only needs to cover the current in-flight window — keeps the query URL bounded.
 const EXCLUDE_WINDOW = 250;
 
+// Drop cards liked earlier this session. On a full page load the client store is
+// empty (module reset), so SSR + hydration both see `initial` unchanged — no
+// hydration mismatch. It only trims on a same-session client re-render (returning
+// to home after liking), which the server-side role='taste' filter never sees.
+// Order is preserved — this never reshuffles.
+function withoutLiked(list: FeedItem[]): FeedItem[] {
+  const liked = getLikedIds();
+  return liked.size ? list.filter((it) => !liked.has(it.id)) : list;
+}
+
 export function InfiniteFeed({ initial }: { initial: FeedItem[] }) {
-  const [items, setItems] = useState<FeedItem[]>(initial);
+  const [items, setItems] = useState<FeedItem[]>(() => withoutLiked(initial));
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(initial.length < PAGE);
   const [error, setError] = useState(false);
@@ -63,31 +61,22 @@ export function InfiniteFeed({ initial }: { initial: FeedItem[] }) {
     doneRef.current = done;
   }, [done]);
 
-  // router.refresh() (e.g. after hiding a tile on the home feed) re-renders the
-  // server component and hands us a NEW `initial` array. useState ignored it after
-  // mount, so reset the accumulated list to the fresh, re-ranked page — the whole
-  // point of the refresh. Reference check, not deep compare: a refresh always
-  // yields a new array instance.
+  // The server returns a freshly-randomised, taste-ranked page on every request
+  // (feed_by_taste jitter + explore) and already excludes liked/imported items,
+  // so a real site refresh looks fresh on its own — no client reshuffle needed.
+  //
+  // router.refresh() (e.g. after a discovery sweep) re-renders the server
+  // component and hands us a NEW `initial` array. useState ignored it after mount,
+  // so reset the accumulated list to the fresh, re-ranked page. Reference check,
+  // not deep compare: a refresh always yields a new array instance.
   const initialRef = useRef(initial);
   useEffect(() => {
     if (initial === initialRef.current) return;
     initialRef.current = initial;
-    setItems(initial);
+    setItems(withoutLiked(initial));
     setDone(initial.length < PAGE);
     setError(false);
   }, [initial]);
-
-  // Reshuffle on demand (hiding a card on the home feed): reorder the cards we
-  // already have so the wall feels fresh, and drop any liked this session — no
-  // re-fetch, no scroll change. Skip the initial nonce so mount doesn't reshuffle.
-  const nonce = useFeedRefreshNonce();
-  const nonceRef = useRef(nonce);
-  useEffect(() => {
-    if (nonce === nonceRef.current) return;
-    nonceRef.current = nonce;
-    const liked = getLikedIds();
-    setItems((prev) => shuffle(prev.filter((it) => !liked.has(it.id) && !isHidden(it.id))));
-  }, [nonce]);
 
   const loadMore = useCallback(async () => {
     if (loadingRef.current || doneRef.current) return;
