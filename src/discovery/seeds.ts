@@ -35,6 +35,13 @@ const STOP = new Set([
   "jpg", "jpeg", "png", "webp", "file", "untitled", "com", "www", "http", "https",
   "pinterest", "instagram", "twitter", "tumblr", "reddit", "flickr", "board",
   "saved", "pin", "post", "posts", "see", "more", "best", "top", "ideas", "idea",
+  // Instagram/CDN URL fragments that leak into captions.
+  "scontent", "cdninstagram", "fbcdn", "https", "http",
+  // Generic caption filler + hashtag noise seen in the taste set (not interests).
+  "fits", "shirt", "deadline", "stunning", "blast", "artblast", "project",
+  "personal", "piece", "full", "used", "made", "check", "team", "stuff",
+  "thing", "things", "want", "love", "feel", "here", "just", "like", "make",
+  "when", "what", "which", "they", "been", "over", "into", "also", "your",
 ]);
 
 let cache: { at: number; seeds: string[] } | null = null;

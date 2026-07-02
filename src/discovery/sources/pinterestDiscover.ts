@@ -5,70 +5,108 @@ import { fetchTextResilient } from "../fetch";
 import { pullFeeds } from "./rss";
 
 /**
- * Pinterest "similar accounts/boards" discovery source.
+ * "Similar accounts/boards/blogs" discovery source (Pinterest + Tumblr).
  *
- * Pinterest killed its public search API and its internal "related boards/users"
- * endpoints need login cookies + block datacenter IPs — so there's no token-free
- * way to ask Pinterest "who's like ArtStation_HQ?". We get the same outcome by
- * letting a general search engine do the "similar" part: query for
- * `<taste-seed> site:pinterest.com`, harvest the profile + board URLs it returns,
- * and turn each into the token-free RSS feed we already know how to ingest:
- *   profile → https://www.pinterest.com/<user>/feed.rss
- *   board   → https://www.pinterest.com/<user>/<board>.rss
+ * Neither platform offers a token-free "related accounts" endpoint (Pinterest's
+ * needs login cookies + blocks datacenter IPs; Tumblr's is gated). We get the
+ * same outcome by letting a general search engine do the "similar" part: query
+ * `<taste-seed> site:<platform>`, harvest the profile/board/blog URLs it returns,
+ * and turn each into the token-free RSS feed we already ingest:
+ *   pinterest profile → https://www.pinterest.com/<user>/feed.rss
+ *   pinterest board   → https://www.pinterest.com/<user>/<board>.rss
+ *   tumblr blog       → https://<blog>.tumblr.com/rss
  *
  * Search backend (paid search APIs like Brave/Bing all now gate or charge):
- *   1. Google Programmable Search JSON API — most reliable, free 100 queries/day
- *      (our runs use ~4). Set GOOGLE_CSE_KEY + GOOGLE_CSE_CX (both free, no card).
- *      Used when both are set. NB: Google Cloud org policies (work accounts) often
- *      deny bare API keys — if so, make the key on a personal account, or just
- *      rely on the keyless backends below.
- *   2. Keyless fallback (no setup, used when the Google vars are unset): Mojeek
- *      HTML first (returns direct result links, tolerant of scraping), then
- *      DuckDuckGo HTML (wraps links in `uddg=` redirects; throttles bursts into an
- *      "anomaly" page, so it's a best-effort last resort). Whichever returns
- *      results first wins per query.
+ *   1. Google Programmable Search JSON API — most reliable, free 100 queries/day.
+ *      Set GOOGLE_CSE_KEY + GOOGLE_CSE_CX (free, no card). NB: Google Cloud org
+ *      policies (work accounts) often deny bare API keys — if so, make the key on
+ *      a personal account, or rely on the keyless backends below. Also: a CSE
+ *      restricted to one site won't return the others; use an "entire web" engine.
+ *   2. Keyless fallback (default, when the Google vars are unset): Mojeek HTML
+ *      first (direct result links, tolerant of scraping), then DuckDuckGo HTML
+ *      (best-effort; throttles bursts into an "anomaly" page). First non-empty wins.
  *
  * Seeds are DERIVED from the user's taste (see discovery/seeds.ts) so the wells
- * follow taste drift — the same seed-guided pull the arena/reddit sources use.
- * Feeds are pulled through the shared RSS parser (pullFeeds), which handles the
- * 236x→736x thumbnail upgrade.
+ * follow taste drift. Feeds run through the shared RSS parser (pullFeeds), which
+ * also does the Pinterest 236x→736x thumbnail upgrade (no-op for Tumblr).
  *
- * Pinterest RSS (and DDG) wall datacenter IPs, so run this LOCALLY
+ * Pinterest/Mojeek/DDG wall datacenter IPs, so run LOCALLY
  * (`npm run discover -- pinterest-discover`) or set DISCOVERY_PROXY_URL so the
  * resilient fetch ladder can reach them from the cron. Kept out of the DEFAULT
  * sweep for that reason — invoke it by name.
  */
-const SEEDS = 4; // taste seeds → one search query each
-const MAX_FEEDS = 12; // cap fetches + embed cost per run
+const SEEDS = 4; // taste seeds → one query per platform each
+const PLATFORMS = ["pinterest.com", "tumblr.com"]; // site: filters, interleaved
+const MAX_FEEDS = 14; // cap fetches + embed cost per run (across platforms)
 const RESULTS_PER_QUERY = 10;
 const DDG_HTML = "https://html.duckduckgo.com/html/";
 const MOJEEK = "https://www.mojeek.com/search";
 const GOOGLE_CSE = "https://www.googleapis.com/customsearch/v1";
-// DDG throttles bursts — space queries out to stay under its radar.
+// DDG/Mojeek throttle bursts — space queries out to stay under their radar.
 const QUERY_GAP_MS = 1500;
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
 
+// --- Pinterest URL → feed --------------------------------------------------
 // First path segment that is a Pinterest system route, not a user handle.
-const RESERVED_USER = new Set([
+const PIN_RESERVED_USER = new Set([
   "pin", "pins", "search", "ideas", "idea", "categories", "category", "today",
   "news", "business", "login", "signup", "join", "settings", "about", "help",
   "discover", "topics", "topic", "videos", "all", "popular", "oembed.json",
   "terms", "privacy", "developers", "newsroom", "careers", "_", "resource",
 ]);
 // Second path segment that is a profile sub-page, not a board.
-const RESERVED_BOARD = new Set([
+const PIN_RESERVED_BOARD = new Set([
   "_saved", "_created", "followers", "following", "pins", "boards", "feed.rss",
   "activity", "more_ideas",
 ]);
-const USER_RE = /^[A-Za-z0-9_]{3,60}$/;
-const BOARD_RE = /^[A-Za-z0-9][A-Za-z0-9-]{0,80}$/;
+const PIN_USER_RE = /^[A-Za-z0-9_]{3,60}$/;
+const PIN_BOARD_RE = /^[A-Za-z0-9][A-Za-z0-9-]{0,80}$/;
 
-/**
- * Turn a Pinterest URL into its RSS feed URL, or null if it isn't a profile/board
- * we can feed (pins, search pages, ideas hubs, etc. are skipped). Regional TLDs
- * (ca./uk.) are accepted but normalised onto www — the board content is global.
- */
+function toPinterestFeed(u: URL): string | null {
+  const segs = u.pathname.split("/").filter(Boolean).map((s) => s.toLowerCase());
+  if (!segs.length) return null;
+  const user = segs[0];
+  if (PIN_RESERVED_USER.has(user) || !PIN_USER_RE.test(user)) return null;
+  // /<user> → whole-profile feed
+  if (segs.length === 1) return `https://www.pinterest.com/${user}/feed.rss`;
+  // /<user>/<board> → board feed
+  if (segs.length === 2) {
+    const board = segs[1].replace(/\.rss$/, "");
+    if (PIN_RESERVED_BOARD.has(segs[1]) || !PIN_BOARD_RE.test(board)) return null;
+    return `https://www.pinterest.com/${user}/${board}.rss`;
+  }
+  return null; // deeper (pins, sections) → not a clean feed
+}
+
+// --- Tumblr URL → feed -----------------------------------------------------
+// Subdomains / path heads that are Tumblr infra, not a blog name.
+const TUMBLR_RESERVED = new Set([
+  "www", "assets", "static", "media", "secure", "safe", "embed", "srvcs", "api",
+  "of", "at", "help", "64", "66", "va",
+  // new-scheme (www.tumblr.com/<x>) app routes:
+  "dashboard", "explore", "search", "settings", "likes", "following", "blog",
+  "tagged", "register", "login", "about", "apps", "policy", "privacy", "tips",
+  "press", "inbox", "new", "reblog",
+]);
+const TUMBLR_BLOG_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
+
+function toTumblrFeed(u: URL): string | null {
+  const host = u.hostname.toLowerCase();
+  let blog: string | undefined;
+  if (host !== "tumblr.com" && host !== "www.tumblr.com") {
+    // <blog>.tumblr.com → subdomain is the blog
+    blog = host.split(".")[0];
+  } else {
+    // www.tumblr.com/<blog> or /blog/view/<blog> (new URL scheme)
+    const segs = u.pathname.split("/").filter(Boolean).map((s) => s.toLowerCase());
+    blog = segs[0] === "blog" ? segs[2] ?? segs[1] : segs[0];
+  }
+  if (!blog || TUMBLR_RESERVED.has(blog) || !TUMBLR_BLOG_RE.test(blog)) return null;
+  return `https://${blog}.tumblr.com/rss`;
+}
+
+/** Dispatch a search-result URL to the right platform feed builder, or null. */
 function toFeedUrl(raw: string): string | null {
   let u: URL;
   try {
@@ -76,24 +114,9 @@ function toFeedUrl(raw: string): string | null {
   } catch {
     return null;
   }
-  if (!/(^|\.)pinterest\.[a-z.]+$/i.test(u.hostname)) return null;
-  const segs = u.pathname.split("/").filter(Boolean).map((s) => s.toLowerCase());
-  if (!segs.length) return null;
-
-  const user = segs[0];
-  if (RESERVED_USER.has(user) || !USER_RE.test(user)) return null;
-
-  // /<user>            → whole-profile feed
-  if (segs.length === 1) return `https://www.pinterest.com/${user}/feed.rss`;
-
-  // /<user>/<board>    → board feed
-  if (segs.length === 2) {
-    const board = segs[1].replace(/\.rss$/, "");
-    if (RESERVED_BOARD.has(segs[1]) || !BOARD_RE.test(board)) return null;
-    return `https://www.pinterest.com/${user}/${board}.rss`;
-  }
-
-  // deeper (/<user>/<board>/<pin>, section pages, …) → not a clean feed
+  const host = u.hostname.toLowerCase();
+  if (/(^|\.)pinterest\.[a-z.]+$/.test(host)) return toPinterestFeed(u);
+  if (/(^|\.)tumblr\.com$/.test(host)) return toTumblrFeed(u);
   return null;
 }
 
@@ -125,23 +148,22 @@ async function googleSearch(query: string, key: string, cx: string): Promise<str
 }
 
 /**
- * Mojeek HTML — keyless, tolerant of scraping, and (unlike DDG) links to results
- * directly, so we just pull every pinterest.com URL out of the page and let
- * toFeedUrl sort profiles/boards from `/ideas/` hubs and `/pin/` pages.
+ * Mojeek HTML — keyless, tolerant of scraping, links to results directly. We pull
+ * every absolute URL off the page and let toFeedUrl keep only the platform
+ * profile/board/blog links (Mojeek's own nav, image CDNs, pins, etc. drop out).
  */
 async function mojeekSearch(query: string): Promise<string[]> {
   const html = await fetchTextResilient(`${MOJEEK}?q=${encodeURIComponent(query)}`, {
     headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" },
   });
   if (!html) return [];
-  return html.match(/https?:\/\/(?:[a-z]{1,3}\.)?pinterest\.com\/[A-Za-z0-9_\-/]+/gi) ?? [];
+  return html.match(/https?:\/\/[^\s"'<>()]+/gi) ?? [];
 }
 
 /**
  * DuckDuckGo HTML fallback. Results are wrapped in
  * `//duckduckgo.com/l/?uddg=<encoded>&rut=…`; we pull each `uddg=` value and
- * decode it. On a throttle/challenge the page carries no results, so we return
- * [] — best-effort by design.
+ * decode it. On a throttle/challenge the page carries no results → [].
  */
 async function ddgSearch(query: string): Promise<string[]> {
   const html = await fetchTextResilient(`${DDG_HTML}?q=${encodeURIComponent(query)}`, {
@@ -185,21 +207,25 @@ export const pinterestDiscoverSource: CandidateSource = {
     const already = configuredFeeds();
     const feeds = new Set<string>();
 
-    // Sequential (DDG throttles bursts; Google's fine either way) with a gap.
-    for (let i = 0; i < seeds.length; i++) {
-      if (i > 0) await sleep(QUERY_GAP_MS);
-      const urls = await search(`${seeds[i]} site:pinterest.com`).catch(() => []);
-      for (const raw of urls) {
-        const feed = toFeedUrl(raw);
-        if (feed && !already.has(feed)) feeds.add(feed);
-        if (feeds.size >= MAX_FEEDS) break;
+    // seed × platform, sequential with a gap (search hosts throttle bursts).
+    let gapPending = false;
+    outer: for (const seed of seeds) {
+      for (const dom of PLATFORMS) {
+        if (gapPending) await sleep(QUERY_GAP_MS);
+        gapPending = true;
+        const urls = await search(`${seed} site:${dom}`).catch(() => []);
+        for (const raw of urls) {
+          const feed = toFeedUrl(raw);
+          if (feed && !already.has(feed)) feeds.add(feed);
+          if (feeds.size >= MAX_FEEDS) break outer;
+        }
       }
-      if (feeds.size >= MAX_FEEDS) break;
     }
 
-    // Stored as platform "rss" (what they are — Pinterest RSS feeds), matching the
-    // rss source; the DiscoveryReport still tags the run "pinterest-discover" via
-    // source.name. ("pinterest-discover" isn't in the items_platform_check enum.)
+    // Stored as platform "rss" (what they are — Pinterest/Tumblr RSS feeds),
+    // matching the rss source; the DiscoveryReport still tags the run
+    // "pinterest-discover" via source.name. (Neither "pinterest-discover" nor a
+    // per-platform label beyond "rss" is in the items_platform_check enum.)
     return pullFeeds([...feeds], "rss");
   },
 };
