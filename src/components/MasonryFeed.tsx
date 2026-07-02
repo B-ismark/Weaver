@@ -6,6 +6,7 @@ import type { FeedItem } from "@/lib/feed";
 import { PinCard } from "./PinCard";
 import { SkeletonFeed } from "./SkeletonFeed";
 import { useColumnCount } from "./useColumnCount";
+import { useHiddenSet } from "@/lib/hiddenStore";
 
 /**
  * Accessible masonry feed.
@@ -116,6 +117,10 @@ export function MasonryFeed({
 
   // Local copy so saved/hidden/broken tiles disappear optimistically.
   const [removed, setRemoved] = useState<Set<string>>(() => new Set());
+  // Session-wide hidden set (survives client navigation) — so a tile marked "not
+  // my taste" stays gone when you return from the detail view, even though the
+  // cached feed still contains it.
+  const hidden = useHiddenSet();
   // Dedup defensively at render by source image URL (not just id): the same image
   // can slip in under two ids (CDN variants, a race before the unique index), and
   // near-identical embeddings rank them adjacent — so a stray dupe would show side
@@ -123,14 +128,14 @@ export function MasonryFeed({
   const items = useMemo(() => {
     const seen = new Set<string>();
     return initial.filter((it) => {
-      if (removed.has(it.id)) return false;
+      if (removed.has(it.id) || hidden.has(it.id)) return false;
       const key = it.fullUrl || it.id;
       if (seen.has(key) || seen.has(it.id)) return false;
       seen.add(key);
       seen.add(it.id);
       return true;
     });
-  }, [initial, removed]);
+  }, [initial, removed, hidden]);
   const onResolved = (id: string) => setRemoved((prev) => new Set(prev).add(id));
 
   // AutoAnimate the grid so save/hide/discovery reflow smoothly (not jump-cut).

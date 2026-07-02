@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { sendSignal } from "@/lib/signals";
 
 /**
  * Soft taste steering on the detail view — "More like this" / "Less like this".
@@ -15,14 +16,6 @@ import { useState } from "react";
  * Accessibility: real buttons, aria-pressed reflects the last choice, a polite
  * live region confirms the nudge. No motion beyond the built-in active:scale.
  */
-async function signal(itemId: string, action: "more" | "less") {
-  await fetch("/api/signal", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ itemId, action }),
-  });
-}
-
 export function TasteNudge({ itemId }: { itemId: string }) {
   const [choice, setChoice] = useState<"" | "more" | "less">("");
   const [status, setStatus] = useState("");
@@ -30,7 +23,7 @@ export function TasteNudge({ itemId }: { itemId: string }) {
   function nudge(action: "more" | "less") {
     setChoice(action);
     setStatus(action === "more" ? "Tuned toward this style" : "Tuned away from this style");
-    signal(itemId, action).catch(() => {});
+    sendSignal(itemId, action).catch(() => {});
   }
 
   const btn =

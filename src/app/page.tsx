@@ -1,6 +1,7 @@
 import { InfiniteFeed } from "@/components/InfiniteFeed";
 import { AppHeader } from "@/components/AppHeader";
 import { Onboarding } from "@/components/Onboarding";
+import { BackToTop } from "@/components/BackToTop";
 import { Reveal } from "@/components/motion/Reveal";
 import { getFeedItems } from "@/lib/items";
 
@@ -32,6 +33,9 @@ export default async function HomePage() {
           <InfiniteFeed initial={items} />
         )}
       </main>
+
+      {/* Reveals only while scrolling back up a long feed. */}
+      <BackToTop />
     </>
   );
 }

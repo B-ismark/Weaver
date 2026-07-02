@@ -8,6 +8,11 @@ import { logEngagement } from "@/lib/engagement";
 import { shouldOptimize } from "@/lib/imageHost";
 import { recordImpression } from "@/lib/impressions";
 import { ItemActions } from "./ItemActions";
+import { TileMenu } from "./TileMenu";
+
+// Long-press duration + movement tolerance for opening the tile menu on touch.
+const LONG_PRESS_MS = 450;
+const MOVE_CANCEL_PX = 10;
 
 /**
  * One feed item — a FRAMELESS gallery tile (not a floating card).
@@ -38,6 +43,44 @@ export function PinCard({
   const [errored, setErrored] = useState(false);
   const cardRef = useRef<HTMLElement>(null);
 
+  // Context menu (right-click / long-press) → the four taste actions. `suppress`
+  // swallows the click that a touch long-press would otherwise fire on release,
+  // so opening the menu never also navigates into the detail view.
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressStart = useRef<{ x: number; y: number } | null>(null);
+  const suppress = useRef(false);
+
+  const clearPress = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    pressStart.current = null;
+  };
+
+  const openMenu = (x: number, y: number) => {
+    clearPress();
+    setMenu({ x, y });
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType !== "touch" || menu) return;
+    suppress.current = false; // fresh gesture — clear any stale long-press flag
+    pressStart.current = { x: e.clientX, y: e.clientY };
+    pressTimer.current = setTimeout(() => {
+      // A long-press fires a synthetic click on release — flag it for swallowing.
+      suppress.current = true;
+      navigator.vibrate?.(12);
+      openMenu(e.clientX, e.clientY);
+    }, LONG_PRESS_MS);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const s = pressStart.current;
+    if (!s) return;
+    if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > MOVE_CANCEL_PX) clearPress();
+  };
+
   // Record an impression once the tile is at least half visible, so the feed can
   // stop showing it after the grace window (migration 0016 / /api/impression).
   useEffect(() => {
@@ -60,10 +103,26 @@ export function PinCard({
   }, [item.id]);
 
   return (
-    <article ref={cardRef} className="group relative overflow-hidden rounded-lg">
-      {/* Actions overlay — visible on hover, and whenever focused (keyboard). */}
+    <article
+      ref={cardRef}
+      className="group relative overflow-hidden rounded-lg [-webkit-touch-callout:none]"
+      onContextMenu={
+        showActions
+          ? (e) => {
+              e.preventDefault();
+              openMenu(e.clientX, e.clientY);
+            }
+          : undefined
+      }
+      onPointerDown={showActions ? onPointerDown : undefined}
+      onPointerMove={showActions ? onPointerMove : undefined}
+      onPointerUp={clearPress}
+      onPointerCancel={clearPress}
+    >
+      {/* Actions overlay — visible on hover / focus, and always on touch devices
+          (no hover): `card-actions` is forced opaque under (hover: none). */}
       {showActions && (
-        <div className="absolute right-2 top-2 z-20 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        <div className="card-actions absolute right-2 top-2 z-20 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
           <ItemActions
             itemId={item.id}
             sourceLink={item.sourceLink}
@@ -74,9 +133,29 @@ export function PinCard({
         </div>
       )}
 
+      {menu && (
+        <TileMenu
+          itemId={item.id}
+          x={menu.x}
+          y={menu.y}
+          initialLiked={item.saved}
+          onResolved={onResolved}
+          onClose={() => setMenu(null)}
+        />
+      )}
+
       <Link
         href={`/item/${item.id}`}
-        onClick={() => logEngagement(item.id, "click")}
+        onClick={(e) => {
+          // A touch long-press synthesises a click on release — swallow it so
+          // opening the menu doesn't also open the detail view.
+          if (suppress.current) {
+            e.preventDefault();
+            suppress.current = false;
+            return;
+          }
+          logEngagement(item.id, "click");
+        }}
         className="block focus-visible:outline-none"
         aria-label={item.caption || "Untitled image"}
       >

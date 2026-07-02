@@ -18,7 +18,7 @@ const LINKS = [
 export function PrimaryNav() {
   const pathname = usePathname();
   return (
-    <nav className="flex shrink-0 items-center gap-4 text-sm" aria-label="Primary">
+    <nav className="flex shrink-0 items-center gap-3 text-sm sm:gap-4" aria-label="Primary">
       {LINKS.map(({ href, label }) => {
         const active = pathname === href;
         return (

@@ -25,7 +25,7 @@ export function SiteHeader({
       // morph moves only the image). See globals.css site-header rules.
       style={{ viewTransitionName: "site-header" }}
     >
-      <div className={`mx-auto flex ${maxWidth} items-center gap-4 px-4 py-3`}>
+      <div className={`mx-auto flex ${maxWidth} items-center gap-2 px-4 py-3 sm:gap-4`}>
         <Link
           href="/"
           aria-label="Weaver home"
@@ -41,7 +41,7 @@ export function SiteHeader({
           </span>
         </Link>
         {leading}
-        <div className="flex flex-1 items-center justify-end gap-4">{children}</div>
+        <div className="flex flex-1 items-center justify-end gap-2 sm:gap-4">{children}</div>
       </div>
     </header>
   );

@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { logEngagement } from "@/lib/engagement";
 import { useLiked, setLiked } from "@/lib/likedStore";
+import { sendSignal } from "@/lib/signals";
+import { useHideItem } from "@/lib/useHideItem";
 
 /**
  * Save / Not-interested / Share for a feed item, with weave-themed
@@ -19,14 +21,6 @@ import { useLiked, setLiked } from "@/lib/likedStore";
  * non-motion fallback — here the colour/state change still happens).
  * Micro-timings sit in the 120–220ms sweet spot; the save burst is ~420ms.
  */
-async function signal(itemId: string, action: "save" | "unsave" | "hide") {
-  await fetch("/api/signal", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ itemId, action }),
-  });
-}
-
 const SPRING = "cubic-bezier(0.34, 1.56, 0.64, 1)"; // overshoot → springy pop
 
 function reduceMotion() {
@@ -125,6 +119,7 @@ export function ItemActions({
   // Shared across all instances for this id (grid tile + detail), seeded from
   // the server-persisted value.
   const liked = useLiked(itemId, initialLiked);
+  const hide = useHideItem();
   const [hiding, setHiding] = useState(false);
   const [shared, setShared] = useState<"" | "copied">("");
   const saveRef = useRef<HTMLButtonElement>(null);
@@ -145,24 +140,28 @@ export function ItemActions({
       silkBurst(saveRef.current);
       haptic(18);
       logEngagement(itemId, "save");
-      signal(itemId, "save").catch(() => {});
+      sendSignal(itemId, "save").catch(() => {});
     } else {
       haptic(8);
-      signal(itemId, "unsave").catch(() => {});
+      sendSignal(itemId, "unsave").catch(() => {});
     }
   }
 
-  // Hide IS terminal — collapse the tile (after the snip plays).
+  // Hide IS terminal — collapse the tile AFTER the snip plays, then persist. The
+  // hook keeps it gone across navigation (hidden store) and refreshes the home
+  // feed. Persisting after the snip lets the scissor animation finish first.
   function onHide() {
     if (hiding) return;
     setHiding(true);
     snip(hideArmA.current, hideArmB.current);
     haptic([8, 30, 8]);
-    logEngagement(itemId, "dismiss");
-    signal(itemId, "hide").catch(() => {});
+    const finish = () => {
+      hide(itemId);
+      onResolved?.(itemId);
+    };
     const d = reduceMotion() ? 0 : 340;
-    if (d === 0) onResolved?.(itemId);
-    else setTimeout(() => onResolved?.(itemId), d);
+    if (d === 0) finish();
+    else setTimeout(finish, d);
   }
   async function onShare() {
     const data = { title: caption || "Weaver", url: sourceLink };

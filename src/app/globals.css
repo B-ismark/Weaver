@@ -134,6 +134,16 @@ body {
   animation: weave-shimmer 1.4s ease-in-out infinite;
 }
 
+/* Touch devices have no hover, so the hover-revealed tile actions (like / not my
+   taste / share) would be unreachable. On a coarse pointer with no hover, keep
+   them visible so they're tappable — the long-press menu is a bonus, not the only
+   way in. Pointer devices still get the clean reveal-on-hover behaviour. */
+@media (hover: none) and (pointer: coarse) {
+  .card-actions {
+    opacity: 1;
+  }
+}
+
 /* Lenis smooth scroll (see SmoothScroll). Recommended rules from the Lenis docs
    so the library owns the scroll timeline without fighting native behaviour. */
 html.lenis,

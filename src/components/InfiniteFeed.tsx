@@ -4,6 +4,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FeedItem } from "@/lib/feed";
 import { MasonryFeed } from "./MasonryFeed";
 import { DiscoverButton } from "./DiscoverButton";
+import { useFeedRefreshNonce } from "@/lib/feedRefresh";
+import { getLikedIds } from "@/lib/likedStore";
+import { isHidden } from "@/lib/hiddenStore";
+
+/** Fisher–Yates shuffle → a fresh, non-repeating order without mutating input. */
+function shuffle<T>(arr: T[]): T[] {
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
 
 /**
  * Infinite-scroll wrapper around the masonry grid.
@@ -49,6 +62,32 @@ export function InfiniteFeed({ initial }: { initial: FeedItem[] }) {
   useEffect(() => {
     doneRef.current = done;
   }, [done]);
+
+  // router.refresh() (e.g. after hiding a tile on the home feed) re-renders the
+  // server component and hands us a NEW `initial` array. useState ignored it after
+  // mount, so reset the accumulated list to the fresh, re-ranked page — the whole
+  // point of the refresh. Reference check, not deep compare: a refresh always
+  // yields a new array instance.
+  const initialRef = useRef(initial);
+  useEffect(() => {
+    if (initial === initialRef.current) return;
+    initialRef.current = initial;
+    setItems(initial);
+    setDone(initial.length < PAGE);
+    setError(false);
+  }, [initial]);
+
+  // Reshuffle on demand (hiding a card on the home feed): reorder the cards we
+  // already have so the wall feels fresh, and drop any liked this session — no
+  // re-fetch, no scroll change. Skip the initial nonce so mount doesn't reshuffle.
+  const nonce = useFeedRefreshNonce();
+  const nonceRef = useRef(nonce);
+  useEffect(() => {
+    if (nonce === nonceRef.current) return;
+    nonceRef.current = nonce;
+    const liked = getLikedIds();
+    setItems((prev) => shuffle(prev.filter((it) => !liked.has(it.id) && !isHidden(it.id))));
+  }, [nonce]);
 
   const loadMore = useCallback(async () => {
     if (loadingRef.current || doneRef.current) return;

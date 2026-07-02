@@ -12,16 +12,22 @@ import { useEffect, useLayoutEffect, useState } from "react";
  * then reflows to 6" flash. `ready` tells the caller when the first real
  * measurement has happened, so it can hold a skeleton until the grid is sized.
  *
- * Column target: ~220px min per column, matching the grid's minmax.
+ * Column target: ~220px min per column on tablet/desktop, matching the grid's
+ * minmax. On phones a strict 220px min collapses to a SINGLE giant column
+ * (a ~330px content width floors to 1); a discovery wall wants at least two
+ * tiles across, so narrow viewports are pinned to 2 columns.
  */
 const MIN_COLUMN_PX = 220;
 const MAX_COLUMNS = 6;
+const PHONE_MAX_PX = 540; // below this, always 2-up (mobile masonry)
 
 // useLayoutEffect warns during SSR; fall back to useEffect on the server.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-const compute = (width: number) =>
-  Math.max(1, Math.min(MAX_COLUMNS, Math.floor(width / MIN_COLUMN_PX)));
+const compute = (width: number) => {
+  if (width < PHONE_MAX_PX) return 2;
+  return Math.max(3, Math.min(MAX_COLUMNS, Math.floor(width / MIN_COLUMN_PX)));
+};
 
 export function useColumnCount(
   ref: React.RefObject<HTMLElement | null>,

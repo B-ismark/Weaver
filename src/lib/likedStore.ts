@@ -26,6 +26,13 @@ export function setLiked(id: string, value: boolean) {
   emit();
 }
 
+/** Ids liked this session — used to drop already-liked cards on a feed reshuffle. */
+export function getLikedIds(): Set<string> {
+  const ids = new Set<string>();
+  for (const [id, value] of state) if (value) ids.add(id);
+  return ids;
+}
+
 function subscribe(cb: () => void) {
   listeners.add(cb);
   return () => listeners.delete(cb);

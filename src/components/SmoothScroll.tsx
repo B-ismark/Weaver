@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Lenis from "lenis";
+import { setLenis } from "@/lib/lenis";
 
 /**
  * App-wide smooth scrolling (Lenis). A long discovery feed glides instead of
@@ -22,6 +23,7 @@ export function SmoothScroll() {
       easing: (t) => 1 - Math.pow(1 - t, 3), // easeOutCubic
       smoothWheel: true,
     });
+    setLenis(lenis);
 
     let raf = 0;
     const loop = (time: number) => {
@@ -32,6 +34,7 @@ export function SmoothScroll() {
 
     return () => {
       cancelAnimationFrame(raf);
+      setLenis(null);
       lenis.destroy();
     };
   }, []);
