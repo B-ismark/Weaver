@@ -32,8 +32,12 @@ const compute = (width: number) => {
 export function useColumnCount(
   ref: React.RefObject<HTMLElement | null>,
   initial = 2
-): { cols: number; ready: boolean } {
+): { cols: number; width: number; ready: boolean } {
   const [cols, setCols] = useState(initial);
+  // Container content width, so the grid can COMPUTE each tile's height from its
+  // aspect ratio instead of measuring the rendered node (which needed a
+  // per-tile ResizeObserver). One observer here feeds the whole grid.
+  const [width, setWidth] = useState(0);
   const [ready, setReady] = useState(false);
 
   useIsoLayoutEffect(() => {
@@ -42,13 +46,16 @@ export function useColumnCount(
 
     // Synchronous first measurement — happens in the same commit as `ready`,
     // so the first painted frame already has the right column count.
-    setCols(compute(el.clientWidth));
+    const w = el.clientWidth;
+    setWidth(w);
+    setCols(compute(w));
     setReady(true);
 
     const ro = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width ?? el.clientWidth;
+      const cw = entries[0]?.contentRect.width ?? el.clientWidth;
+      setWidth((prev) => (prev === cw ? prev : cw));
       setCols((prev) => {
-        const next = compute(width);
+        const next = compute(cw);
         return next === prev ? prev : next;
       });
     });
@@ -56,5 +63,5 @@ export function useColumnCount(
     return () => ro.disconnect();
   }, [ref]);
 
-  return { cols, ready };
+  return { cols, width, ready };
 }

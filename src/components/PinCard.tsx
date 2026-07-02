@@ -6,8 +6,8 @@ import { useEffect, useRef, useState, ViewTransition } from "react";
 import type { FeedItem } from "@/lib/feed";
 import { logEngagement } from "@/lib/engagement";
 import { shouldOptimize } from "@/lib/imageHost";
-import { recordImpression } from "@/lib/impressions";
-import { ItemActions } from "./ItemActions";
+import { observeImpression } from "@/lib/impressions";
+import { LikeButton } from "./LikeButton";
 import { TileMenu } from "./TileMenu";
 
 // Long-press duration + movement tolerance for opening the tile menu on touch.
@@ -17,11 +17,14 @@ const MOVE_CANCEL_PX = 10;
 /**
  * One feed item — a FRAMELESS gallery tile (not a floating card).
  *
- * Deliberately un-Pinterest: no white card, no gray padding, no always-on caption
- * strip. The image goes edge-to-edge with a tight radius; caption + platform live
- * in an on-demand gradient overlay revealed on hover/focus, so the wall reads as
- * curated imagery, not a pinboard. A hairline gold frame (the web-hub colour)
- * fades in on hover to tie the tile to the weave identity.
+ * Deliberately un-Pinterest and DECLUTTERED: no white card, no gray padding, no
+ * always-on caption strip, no 3-button action strip — the wall reads as pure
+ * curated imagery. The ONLY on-tile control is a subtle heart that reveals on
+ * hover/focus (pointer devices) and stays hidden on touch; deeper taste steering
+ * lives in the long-press / right-click menu and the detail view. Fewer
+ * components per tile = smoother mobile scroll. The image goes edge-to-edge with
+ * a tight radius; caption + a hairline gold frame reveal on hover/focus to tie
+ * the tile to the weave identity.
  *
  * - Reserves space via intrinsic width/height → no layout shift (a11y/efficiency).
  * - Shimmer skeleton shows until the thumb decodes — no blank flash.
@@ -83,23 +86,12 @@ export function PinCard({
 
   // Record an impression once the tile is at least half visible, so the feed can
   // stop showing it after the grace window (migration 0016 / /api/impression).
+  // Uses ONE shared observer for the whole feed (see impressions.ts) rather than
+  // an observer per tile.
   useEffect(() => {
     const el = cardRef.current;
     if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            recordImpression(item.id);
-            io.disconnect();
-            break;
-          }
-        }
-      },
-      { threshold: 0.5 }
-    );
-    io.observe(el);
-    return () => io.disconnect();
+    return observeImpression(el, item.id);
   }, [item.id]);
 
   return (
@@ -119,17 +111,13 @@ export function PinCard({
       onPointerUp={clearPress}
       onPointerCancel={clearPress}
     >
-      {/* Actions overlay — visible on hover / focus, and always on touch devices
-          (no hover): `card-actions` is forced opaque under (hover: none). */}
+      {/* A single subtle heart — the only action left ON the tile (declutter).
+          Hover/focus-reveal on pointer devices; hidden on touch (no hover),
+          where the long-press menu below and the detail view's full action bar
+          cover it. Sits outside the Link so a tap likes, not navigates. */}
       {showActions && (
-        <div className="card-actions absolute right-2 top-2 z-20 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-          <ItemActions
-            itemId={item.id}
-            sourceLink={item.sourceLink}
-            caption={item.caption}
-            initialLiked={item.saved}
-            onResolved={onResolved}
-          />
+        <div className="absolute right-2 top-2 z-20 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+          <LikeButton itemId={item.id} initialLiked={item.saved} />
         </div>
       )}
 

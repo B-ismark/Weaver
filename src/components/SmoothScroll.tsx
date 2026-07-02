@@ -11,12 +11,15 @@ import { setLenis } from "@/lib/lenis";
  *
  * Side-effect only — renders nothing. Guards:
  *  - Skipped entirely under prefers-reduced-motion (native scroll restored).
- *  - Only wheel/programmatic scroll is smoothed; touch stays native, so mobile /
- *    PWA gestures feel normal and momentum isn't fought.
+ *  - Skipped on touch/coarse-pointer devices (phones, tablets): native momentum
+ *    scrolling is already smoother than any JS rAF loop, and Lenis' perpetual
+ *    requestAnimationFrame did nothing there but cost frames/battery. Desktop
+ *    (fine pointer) still gets smoothed wheel + programmatic scroll.
  */
 export function SmoothScroll() {
   useEffect(() => {
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.matchMedia?.("(pointer: coarse)").matches) return;
 
     const lenis = new Lenis({
       duration: 1.05,

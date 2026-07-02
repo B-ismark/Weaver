@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import autoAnimate from "@formkit/auto-animate";
 import type { FeedItem } from "@/lib/feed";
 import { PinCard } from "./PinCard";
@@ -28,7 +28,7 @@ import { useHiddenSet } from "@/lib/hiddenStore";
  * neutralised under prefers-reduced-motion (AutoAnimate honours it natively; the
  * reveal keyframe is zeroed by the global reduced-motion override).
  *
- * The native CSS Grid masonry ("grid lanes") will replace this measure-and-span
+ * The native CSS Grid masonry ("grid lanes") will replace this compute-and-span
  * dance once it ships across engines (~late 2026); the markup is already ready.
  */
 // 1px auto-rows (with zero row-gap) give the span near-pixel granularity, so a
@@ -38,58 +38,48 @@ import { useHiddenSet } from "@/lib/hiddenStore";
 const ROW_PX = 1;
 const GAP_PX = 16;
 
-// useLayoutEffect warns during SSR; fall back to useEffect on the server.
-const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
-
+/**
+ * A tile's height is fully determined by its column width and the image's
+ * intrinsic aspect ratio (PinCard reserves that exact box) — so we COMPUTE it
+ * instead of measuring the rendered node. This retired the per-tile
+ * ResizeObserver + getBoundingClientRect that fired on every scroll frame and
+ * decode, the main mobile-scroll jank source.
+ *
+ * `content-visibility: auto` then lets the browser skip layout & paint for tiles
+ * off-screen — the single biggest win on a long feed — while `contain-intrinsic-
+ * size` keeps the scroll height stable so the bar doesn't jump.
+ */
 function MasonryCell({
   item,
   priority,
   showActions,
   feature,
-  reveal,
-  index,
+  colWidth,
   onResolved,
 }: {
   item: FeedItem;
   priority: boolean;
   showActions: boolean;
   feature: boolean;
-  reveal: boolean;
-  index: number;
+  colWidth: number;
   onResolved?: (id: string) => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [span, setSpan] = useState(1);
-
-  useIsoLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => {
-      const h = el.getBoundingClientRect().height;
-      // rows to cover the tile (1px each) + GAP_PX rows for the gap beneath it.
-      setSpan(Math.max(1, Math.ceil(h) + GAP_PX));
-    };
-    measure();
-    // A feature tile spans 2 columns → it gets WIDER, so its measured height
-    // changes; the ResizeObserver already re-measures, keeping the row-span exact.
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [feature]);
+  const ratio = item.width > 0 ? item.height / item.width : 1;
+  const h = colWidth > 0 ? colWidth * ratio : 0;
+  const span = Math.max(1, Math.ceil(h) + GAP_PX);
 
   return (
     <div
-      className={reveal ? "tile-reveal" : undefined}
-      // Stagger the weave-in; cap the delay so a long feed doesn't trickle in.
       style={{
         gridRowEnd: `span ${span}`,
         gridColumn: feature ? "span 2" : undefined,
-        animationDelay: reveal ? `${Math.min(index, 14) * 35}ms` : undefined,
+        contentVisibility: "auto",
+        // `auto` remembers the real size once rendered; the computed height is
+        // the placeholder until then.
+        containIntrinsicSize: h > 0 ? `auto ${Math.ceil(h)}px` : undefined,
       }}
     >
-      <div ref={ref}>
-        <PinCard item={item} priority={priority} showActions={showActions} onResolved={onResolved} />
-      </div>
+      <PinCard item={item} priority={priority} showActions={showActions} onResolved={onResolved} />
     </div>
   );
 }
@@ -113,7 +103,10 @@ export function MasonryFeed({
   showActions?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { cols, ready } = useColumnCount(containerRef);
+  const { cols, width, ready } = useColumnCount(containerRef);
+  // Pixel width of one column track (minmax(0,1fr) share of the row after gaps),
+  // feeding each cell's computed height.
+  const unit = cols > 0 && width > 0 ? (width - (cols - 1) * GAP_PX) / cols : 0;
 
   // Local copy so saved/hidden/broken tiles disappear optimistically.
   const [removed, setRemoved] = useState<Set<string>>(() => new Set());
@@ -169,19 +162,23 @@ export function MasonryFeed({
         }}
       >
         {ready &&
-          items.map((item, i) => (
-            // Eager-load the first row so the LCP image isn't lazy (efficiency).
-            <MasonryCell
-              key={item.id}
-              item={item}
-              priority={i < cols}
-              showActions={showActions}
-              feature={isFeature(i, cols)}
-              reveal={ready}
-              index={i}
-              onResolved={onResolved}
-            />
-          ))}
+          items.map((item, i) => {
+            const feature = isFeature(i, cols);
+            // A feature tile spans 2 tracks + the gap between them.
+            const colWidth = feature ? unit * 2 + GAP_PX : unit;
+            return (
+              // Eager-load the first row so the LCP image isn't lazy (efficiency).
+              <MasonryCell
+                key={item.id}
+                item={item}
+                priority={i < cols}
+                showActions={showActions}
+                feature={feature}
+                colWidth={colWidth}
+                onResolved={onResolved}
+              />
+            );
+          })}
       </section>
     </>
   );

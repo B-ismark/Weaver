@@ -43,6 +43,45 @@ export function recordImpression(id: string) {
   if (!timer) timer = setTimeout(flush, 1500);
 }
 
+/**
+ * One shared IntersectionObserver for the whole feed, instead of one per tile.
+ * A long infinite feed can hold hundreds of tiles; a per-tile observer meant
+ * hundreds of observers churning during scroll. This registers an element→id,
+ * records the impression the first time it's ≥50% visible, then stops watching
+ * it. Elements are keyed weakly so unmounted tiles don't leak.
+ */
+let io: IntersectionObserver | null = null;
+const idFor = new WeakMap<Element, string>();
+
+function observer(): IntersectionObserver | null {
+  if (io || typeof window === "undefined") return io;
+  io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        const id = idFor.get(e.target);
+        if (id) recordImpression(id);
+        io?.unobserve(e.target);
+        idFor.delete(e.target);
+      }
+    },
+    { threshold: 0.5 }
+  );
+  return io;
+}
+
+/** Watch a tile for its first on-screen impression. Returns a cleanup fn. */
+export function observeImpression(el: Element, id: string): () => void {
+  const obs = observer();
+  if (!obs) return () => {};
+  idFor.set(el, id);
+  obs.observe(el);
+  return () => {
+    obs.unobserve(el);
+    idFor.delete(el);
+  };
+}
+
 if (typeof window !== "undefined") {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") flush();

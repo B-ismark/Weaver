@@ -94,23 +94,6 @@ body {
   }
 }
 
-/* Staggered "weave-in" for masonry tiles on first paint (MasonryFeed). Each
-   tile fades + lifts into place; the per-tile delay is set inline. Zeroed by the
-   reduced-motion override below → tiles just appear. */
-@keyframes tile-weave-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-.tile-reveal {
-  animation: tile-weave-in 480ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
-}
-
 /* Shimmer for skeleton loaders (cards + search). Frozen under reduced-motion
    by the override below → degrades to a flat surface tint. */
 @keyframes weave-shimmer {
@@ -132,16 +115,6 @@ body {
   background-size: 200% 100%;
   background-repeat: no-repeat;
   animation: weave-shimmer 1.4s ease-in-out infinite;
-}
-
-/* Touch devices have no hover, so the hover-revealed tile actions (like / not my
-   taste / share) would be unreachable. On a coarse pointer with no hover, keep
-   them visible so they're tappable — the long-press menu is a bonus, not the only
-   way in. Pointer devices still get the clean reveal-on-hover behaviour. */
-@media (hover: none) and (pointer: coarse) {
-  .card-actions {
-    opacity: 1;
-  }
 }
 
 /* Lenis smooth scroll (see SmoothScroll). Recommended rules from the Lenis docs
