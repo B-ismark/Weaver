@@ -3,7 +3,9 @@
 import { useRef, useState } from "react";
 import { logEngagement } from "@/lib/engagement";
 import { useLiked, setLiked } from "@/lib/likedStore";
+import { unhideItem } from "@/lib/hiddenStore";
 import { sendSignal } from "@/lib/signals";
+import { showUndo } from "@/lib/undoStore";
 import { useHideItem } from "@/lib/useHideItem";
 import { reduceMotion, pop, silkBurst, snip } from "@/lib/tasteAnimations";
 
@@ -26,6 +28,10 @@ import { reduceMotion, pop, silkBurst, snip } from "@/lib/tasteAnimations";
 // tile action bar — see lib/tasteAnimations.
 function haptic(pattern: number | number[]) {
   if (typeof navigator !== "undefined") navigator.vibrate?.(pattern);
+}
+
+function trim(s: string, n = 24): string {
+  return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
 export function ItemActions({
@@ -87,6 +93,19 @@ export function ItemActions({
     const finish = () => {
       hide(itemId);
       onResolved?.(itemId);
+      // Same reversible affordance as the feed tile's action bar — a "Not my
+      // taste" here was previously silent + un-undoable. The overlay passes no
+      // onResolved, so the hide runs purely through hiddenStore, which unhide
+      // fully restores.
+      showUndo({
+        id: itemId,
+        label: caption ? `Hid “${trim(caption)}”` : "Removed from your feed",
+        undo: () => {
+          setHiding(false);
+          unhideItem(itemId);
+          sendSignal(itemId, "unhide").catch(() => {});
+        },
+      });
     };
     const d = reduceMotion() ? 0 : 340;
     if (d === 0) finish();
