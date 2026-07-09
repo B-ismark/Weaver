@@ -6,6 +6,7 @@ import { useLiked, setLiked } from "@/lib/likedStore";
 import { hideItem, unhideItem } from "@/lib/hiddenStore";
 import { sendSignal } from "@/lib/signals";
 import { showUndo } from "@/lib/undoStore";
+import { reduceMotion, pop, silkBurst, snip } from "@/lib/tasteAnimations";
 
 /**
  * The four taste actions as a row anchored at the BOTTOM of a feed tile — the
@@ -69,51 +70,77 @@ export function TileActionBar({
     {
       key: "hide",
       label: "Not my taste",
+      // Two <g> arms (pivoting about the rivet 12,12) so `snip` can close them
+      // like scissors — same structure as the detail view's ItemActions.
       icon: (
         <>
-          <circle cx="6" cy="6" r="3" />
-          <circle cx="6" cy="18" r="3" />
-          <line x1="20" y1="4" x2="8.12" y2="15.88" />
-          <line x1="14.47" y1="14.48" x2="20" y2="20" />
-          <line x1="8.12" y1="8.12" x2="12" y2="12" />
+          <g style={{ transformBox: "view-box", transformOrigin: "12px 12px" }}>
+            <circle cx="6" cy="6" r="3" />
+            <line x1="8.12" y1="8.12" x2="12" y2="12" />
+            <line x1="14.47" y1="14.48" x2="20" y2="20" />
+          </g>
+          <g style={{ transformBox: "view-box", transformOrigin: "12px 12px" }}>
+            <circle cx="6" cy="18" r="3" />
+            <line x1="20" y1="4" x2="8.12" y2="15.88" />
+          </g>
         </>
       ),
     },
   ];
 
-  function run(key: ActionKey) {
+  // Same weave micro-interactions as the detail view (shared lib): pop the icon,
+  // silk-burst on save, scissors snip on hide. `index` locates the tapped button
+  // so we can animate its own node.
+  function run(key: ActionKey, index: number) {
+    const btn = btnRefs.current[index] ?? null;
+    const icon = btn?.querySelector("svg") ?? null;
     switch (key) {
       case "like": {
         const next = !liked;
         setLiked(itemId, next);
+        pop(icon);
         navigator.vibrate?.(next ? 16 : 8);
-        if (next) logEngagement(itemId, "save");
-        sendSignal(itemId, next ? "save" : "unsave").catch(() => {});
+        if (next) {
+          silkBurst(btn);
+          logEngagement(itemId, "save");
+          sendSignal(itemId, "save").catch(() => {});
+        } else {
+          sendSignal(itemId, "unsave").catch(() => {});
+        }
         break;
       }
       case "more":
+        pop(icon);
         navigator.vibrate?.(10);
         sendSignal(itemId, "more").catch(() => {});
         break;
       case "less":
+        pop(icon);
         navigator.vibrate?.(10);
         sendSignal(itemId, "less").catch(() => {});
         break;
       case "hide": {
-        // Reactive collapse: hiddenStore drives every mounted grid to reflow the
-        // tile out. NOT onResolved (which is permanent) — so Undo can restore it.
-        hideItem(itemId);
+        // Snip the scissors, THEN collapse — so the animation plays before the
+        // tile folds away (matches the detail view). Reactive collapse via
+        // hiddenStore; NOT onResolved (permanent) so Undo can restore it.
+        const arms = btn?.querySelectorAll("g");
+        snip((arms?.[0] as SVGGElement) ?? null, (arms?.[1] as SVGGElement) ?? null);
         navigator.vibrate?.([8, 24, 8]);
         logEngagement(itemId, "dismiss");
-        sendSignal(itemId, "hide").catch(() => {});
-        showUndo({
-          id: itemId,
-          label: caption ? `Hid “${trim(caption)}”` : "Removed from your feed",
-          undo: () => {
-            unhideItem(itemId);
-            sendSignal(itemId, "unhide").catch(() => {});
-          },
-        });
+        const commit = () => {
+          hideItem(itemId);
+          sendSignal(itemId, "hide").catch(() => {});
+          showUndo({
+            id: itemId,
+            label: caption ? `Hid “${trim(caption)}”` : "Removed from your feed",
+            undo: () => {
+              unhideItem(itemId);
+              sendSignal(itemId, "unhide").catch(() => {});
+            },
+          });
+        };
+        if (reduceMotion()) commit();
+        else setTimeout(commit, 340);
         break;
       }
     }
@@ -186,7 +213,7 @@ export function TileActionBar({
       return;
     }
     const i = hiRef.current;
-    if (i != null) run(actions[i].key);
+    if (i != null) run(actions[i].key, i);
     onClose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commitSeq]);
@@ -221,10 +248,12 @@ export function TileActionBar({
               // Pointer (mouse/pen) path: a normal click. On touch, the parent
               // preventDefaults the synthetic click, so this never double-fires.
               onClick={() => {
-                run(a.key);
+                run(a.key, i);
                 onClose();
               }}
-              className={`flex items-center justify-center rounded-full bg-background/90 p-2.5 text-foreground shadow-sm backdrop-blur transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              // relative + overflow-visible so the silk-burst strands anchor to and
+              // escape the button.
+              className={`relative flex items-center justify-center overflow-visible rounded-full bg-background/90 p-2.5 text-foreground shadow-sm backdrop-blur transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 isLike && liked ? "text-accent" : ""
               }`}
             >
