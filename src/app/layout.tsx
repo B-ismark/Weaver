@@ -6,6 +6,7 @@ import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { WeaverBackground } from "@/components/WeaverBackground";
 import { SilkMotes } from "@/components/SilkMotes";
 import { MotionProvider } from "@/components/motion/MotionProvider";
+import { UndoToast } from "@/components/UndoToast";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -32,7 +33,10 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({
+  children,
+  modal,
+}: Readonly<{ children: React.ReactNode; modal?: React.ReactNode }>) {
   return (
     <html
       lang="en"
@@ -45,12 +49,21 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </a>
         <WeaverBackground />
         <SilkMotes />
-        <MotionProvider>{children}</MotionProvider>
+        {/* The feed (`children`) and the intercepted detail overlay (`modal`, null
+            by default) render side by side. The tile→hero morph + neighbour reflow
+            coordinate across this parallel-route boundary via the module-level
+            morphStore, so no shared provider is needed. */}
+        <MotionProvider>
+          {children}
+          {modal}
+        </MotionProvider>
         <footer className="mt-auto border-t border-surface px-4 py-4 text-center text-xs text-muted">
           <Link href="/privacy" className="hover:text-foreground">
             Privacy Policy
           </Link>
         </footer>
+        {/* Session-wide "Undo" bar for reversible taste actions (Not my taste). */}
+        <UndoToast />
         <ServiceWorkerRegistrar />
       </body>
     </html>

@@ -18,11 +18,14 @@ export const dynamic = "force-dynamic";
  * Detail view (§2): enlarge the image, show platform + caption, link out to the
  * original, and surface "more like this" (§6.1). Server component.
  *
+ * This standalone page renders on a HARD load / refresh / direct link. In-app
+ * soft navigations are intercepted by the @modal slot and shown as an overlay
+ * instead (see app/@modal/(.)item/[id]).
+ *
  * PERF: only the single-row `getItemById` is awaited before rendering the shell,
  * so the navigation commits (and the tile→hero morph fires) the moment that fast
  * query lands. The slow pgvector "more like this" RPC streams in behind a
- * <Suspense> boundary instead of blocking first paint — this is what makes the
- * tap feel instant. See <SimilarSection>.
+ * <Suspense> boundary instead of blocking first paint. See <SimilarSection>.
  */
 export default async function ItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -37,14 +40,31 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
         <div className="grid gap-6 md:grid-cols-[2fr_1fr]">
-          {/* Full-resolution, hotlinked (§5.2). Falls back to source link on 403. */}
           <div
             className="relative w-full overflow-hidden rounded-2xl bg-surface"
             style={{ aspectRatio: `${item.width} / ${item.height}` }}
           >
-            {/* Same name as the feed thumbnail → the tile morphs into this hero.
-                default="none" mirrors PinCard: the hero only animates as the
-                shared element, never on the Suspense reveal below. */}
+            {/* Thumb underlay: the ~400px WebP is a fraction of the full-res bytes,
+                so it paints almost immediately (even cold, on mobile) while the
+                hotlinked full-res streams in on top — no blank hero. The empty
+                full-res <img> shows this through until it decodes. Skipped when the
+                thumb IS the full image (nothing lighter to show first). */}
+            {item.thumbUrl !== item.fullUrl && (
+              <Image
+                src={item.thumbUrl}
+                alt=""
+                aria-hidden="true"
+                fill
+                sizes="(max-width: 768px) 100vw, 66vw"
+                unoptimized={!shouldOptimize(item.thumbUrl)}
+                className="object-contain"
+                priority
+              />
+            )}
+            {/* Full-resolution, hotlinked (§5.2). Same name as the feed thumbnail →
+                the tile morphs into this hero. default="none" mirrors PinCard: the
+                hero only animates as the shared element, never on the Suspense
+                reveal below. */}
             <ViewTransition name={`item-${item.id}`} share="morph" default="none">
               <Image
                 src={item.fullUrl}
@@ -109,7 +129,9 @@ async function SimilarSection({ id }: { id: string }) {
   if (similar.length === 0) return null;
   return (
     <SimilarFrame>
-      <MasonryFeed items={similar} />
+      {/* morph off: these tiles must not share an `item-<id>` view-transition-name
+          with a still-mounted feed tile during a morph (duplicate name = glitch). */}
+      <MasonryFeed items={similar} morph={false} />
     </SimilarFrame>
   );
 }

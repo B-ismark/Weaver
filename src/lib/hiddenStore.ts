@@ -29,6 +29,18 @@ export function hideItem(id: string) {
   emit();
 }
 
+/**
+ * Reverse a hide — the "Undo" affordance after a "Not my taste". Puts the tile
+ * back in the shared hidden set so every mounted grid reveals it again; the
+ * caller also re-sends the `unhide` signal so the server stops suppressing it.
+ */
+export function unhideItem(id: string) {
+  if (!hidden.has(id)) return;
+  hidden = new Set(hidden);
+  hidden.delete(id);
+  emit();
+}
+
 export function isHidden(id: string) {
   return hidden.has(id);
 }

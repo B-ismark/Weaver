@@ -4,7 +4,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { FeedItem } from "@/lib/feed";
 import { MasonryFeed } from "./MasonryFeed";
 import { DiscoverButton } from "./DiscoverButton";
-import { getLikedIds } from "@/lib/likedStore";
 
 /**
  * Infinite-scroll wrapper around the masonry grid.
@@ -75,18 +74,13 @@ function resolveFeedKey(): { key: string; fresh: boolean } {
   return { key, fresh: true };
 }
 
-// Drop cards liked earlier this session. On a full page load the client store is
-// empty (module reset), so SSR + hydration both see `initial` unchanged — no
-// hydration mismatch. It only trims on a same-session client re-render (returning
-// to home after liking), which the server-side role='taste' filter never sees.
-// Order is preserved — this never reshuffles.
-function withoutLiked(list: FeedItem[]): FeedItem[] {
-  const liked = getLikedIds();
-  return liked.size ? list.filter((it) => !liked.has(it.id)) : list;
-}
-
 export function InfiniteFeed({ initial }: { initial: FeedItem[] }) {
-  const [items, setItems] = useState<FeedItem[]>(() => withoutLiked(initial));
+  // Like is a TOGGLE and never removes a tile — only Hide does. So we DON'T strip
+  // liked cards from the current view: doing that made a like retroactively delete
+  // a tile the user was still looking at (jarring, and contradicting the toggle).
+  // Liked candidates simply don't reappear on the NEXT server page — feed_by_taste
+  // already excludes role='taste' — so no client-side trim is needed for freshness.
+  const [items, setItems] = useState<FeedItem[]>(initial);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(initial.length < PAGE);
   const [error, setError] = useState(false);
@@ -197,7 +191,7 @@ export function InfiniteFeed({ initial }: { initial: FeedItem[] }) {
   useEffect(() => {
     if (initial === initialRef.current) return;
     initialRef.current = initial;
-    setItems(withoutLiked(initial));
+    setItems(initial);
     setDone(initial.length < PAGE);
     setError(false);
   }, [initial]);

@@ -7,6 +7,7 @@ import { PinCard } from "./PinCard";
 import { SkeletonFeed } from "./SkeletonFeed";
 import { useColumnCount } from "./useColumnCount";
 import { useHiddenSet } from "@/lib/hiddenStore";
+import { useBrokenSet } from "@/lib/brokenStore";
 
 /**
  * Accessible masonry feed.
@@ -53,6 +54,7 @@ function MasonryCell({
   item,
   priority,
   showActions,
+  morph,
   feature,
   colWidth,
   onResolved,
@@ -60,6 +62,7 @@ function MasonryCell({
   item: FeedItem;
   priority: boolean;
   showActions: boolean;
+  morph: boolean;
   feature: boolean;
   colWidth: number;
   onResolved?: (id: string) => void;
@@ -79,7 +82,7 @@ function MasonryCell({
         containIntrinsicSize: h > 0 ? `auto ${Math.ceil(h)}px` : undefined,
       }}
     >
-      <PinCard item={item} priority={priority} showActions={showActions} onResolved={onResolved} />
+      <PinCard item={item} priority={priority} showActions={showActions} morph={morph} onResolved={onResolved} />
     </div>
   );
 }
@@ -98,9 +101,13 @@ function isFeature(index: number, cols: number): boolean {
 export function MasonryFeed({
   items: initial,
   showActions = true,
+  morph = true,
 }: {
   items: FeedItem[];
   showActions?: boolean;
+  // Shared-element morph on tiles. Off for secondary grids (detail "Threads from
+  // this") to avoid duplicate view-transition-names colliding with feed tiles.
+  morph?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { cols, width, ready } = useColumnCount(containerRef);
@@ -114,6 +121,10 @@ export function MasonryFeed({
   // my taste" stays gone when you return from the detail view, even though the
   // cached feed still contains it.
   const hidden = useHiddenSet();
+  // Session-wide broken-image set (survives client navigation) — a tile whose
+  // image failed to load stays gone across views, not just until this grid
+  // remounts. Same shape as the hidden set.
+  const broken = useBrokenSet();
   // Dedup defensively at render by source image URL (not just id): the same image
   // can slip in under two ids (CDN variants, a race before the unique index), and
   // near-identical embeddings rank them adjacent — so a stray dupe would show side
@@ -121,14 +132,14 @@ export function MasonryFeed({
   const items = useMemo(() => {
     const seen = new Set<string>();
     return initial.filter((it) => {
-      if (removed.has(it.id) || hidden.has(it.id)) return false;
+      if (removed.has(it.id) || hidden.has(it.id) || broken.has(it.id)) return false;
       const key = it.fullUrl || it.id;
       if (seen.has(key) || seen.has(it.id)) return false;
       seen.add(key);
       seen.add(it.id);
       return true;
     });
-  }, [initial, removed, hidden]);
+  }, [initial, removed, hidden, broken]);
   const onResolved = (id: string) => setRemoved((prev) => new Set(prev).add(id));
 
   // AutoAnimate the grid so save/hide/discovery reflow smoothly (not jump-cut).
@@ -173,6 +184,7 @@ export function MasonryFeed({
                 item={item}
                 priority={i < cols}
                 showActions={showActions}
+                morph={morph}
                 feature={feature}
                 colWidth={colWidth}
                 onResolved={onResolved}
