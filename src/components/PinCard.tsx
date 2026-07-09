@@ -10,7 +10,7 @@ import { logEngagement } from "@/lib/engagement";
 import { shouldOptimize } from "@/lib/imageHost";
 import { observeImpression } from "@/lib/impressions";
 import { markBroken } from "@/lib/brokenStore";
-import { openMorph, readMorph, subscribeMorph, type MorphActive } from "./morph/morphStore";
+import { openMorph, readMorph, subscribeMorph, type MorphState } from "./morph/morphStore";
 import { TileActionBar } from "./TileActionBar";
 
 // Long-press to summon the action bar; a drag past this many px first is a scroll,
@@ -40,12 +40,13 @@ type BarMode = "touch" | "menu" | null;
  * One feed item — a FRAMELESS gallery tile (not a floating card).
  *
  * Two interactions live here:
- *   1. TAP → opens the detail overlay with a shared-element morph. On tap the tile
- *      publishes its rect to MorphContext; the intercepted @modal hero flies out
- *      of that rect while this tile's neighbours are pushed aside (the reflow,
- *      run imperatively below so hundreds of mounted tiles don't re-render). The
- *      `morph` prop gates this — off on secondary grids (detail/modal "Threads
- *      from this") so those tiles don't reflow a still-mounted feed behind them.
+ *   1. TAP → opens the detail overlay (DetailOverlay/Lightbox) instantly. On tap
+ *      the tile publishes ITS OWN data + rect to the morphStore; the overlay's
+ *      hero flies out of that rect. If `morph` is on, this tile also reflows its
+ *      neighbours (pushes them aside) when ANY tile opens — imperatively, so
+ *      hundreds of mounted tiles don't re-render. `morph` is off on secondary
+ *      grids ("Threads from this") so they don't reflow the feed behind the
+ *      overlay; tapping them still opens (drills) the overlay.
  *   2. LONG-PRESS (touch) / hover (pointer) → the bottom TileActionBar: like,
  *      more, less, not-my-taste. On touch you slide across the icons and release
  *      on one (release-to-pick); on pointer devices each icon is a normal button.
@@ -73,7 +74,9 @@ export function PinCard({
   const [errored, setErrored] = useState(false);
   const cardRef = useRef<HTMLElement>(null);
 
-  const canMorph = morph;
+  // `morph` now gates only the neighbour reflow; every tile opens the overlay on
+  // tap regardless (secondary grids drill into it).
+  const reflowEnabled = morph;
 
   // Action-bar gesture state.
   const [barMode, setBarMode] = useState<BarMode>(null);
@@ -191,12 +194,12 @@ export function PinCard({
   // self-gates on viewport visibility.
   const pushed = useRef(false);
   useEffect(() => {
-    if (!canMorph) return;
+    if (!reflowEnabled) return;
     const node = cardRef.current;
     if (!node) return;
     const reduce = reduceMotion();
 
-    const apply = (active: MorphActive) => {
+    const apply = (active: MorphState) => {
       // Closed → settle everything back and reveal.
       if (!active) {
         node.style.opacity = "";
@@ -210,7 +213,7 @@ export function PinCard({
       // This IS the source tile: it never gets pushed. Stay visible while opening
       // (the overlay occludes it anyway, so there's no vanish-flash during load);
       // hide it only as the hero flies home, then the `!active` branch reveals it.
-      if (active.id === item.id) {
+      if (active.item.id === item.id) {
         node.style.transform = "";
         node.style.opacity = active.phase === "closing" ? "0" : "";
         return;
@@ -229,7 +232,8 @@ export function PinCard({
         return;
       }
       // Opening → push out along the radial from the opening tile, if on-screen.
-      if (reduce) return;
+      // No source rect (a drill/back open) → nothing to push away from.
+      if (reduce || !active.rect) return;
       const r = node.getBoundingClientRect();
       const vw = window.innerWidth;
       const vh = window.innerHeight;
@@ -250,7 +254,7 @@ export function PinCard({
 
     apply(readMorph()); // catch a morph already open when this tile mounts
     return subscribeMorph(() => apply(readMorph()));
-  }, [canMorph, item.id]);
+  }, [reflowEnabled, item.id]);
 
   const onTap = (e: React.MouseEvent) => {
     if (blockClick.current) {
@@ -258,9 +262,13 @@ export function PinCard({
       blockClick.current = false;
       return;
     }
-    if (canMorph && cardRef.current) {
-      openMorph(item.id, cardRef.current.getBoundingClientRect());
-    }
+    // Let modifier / middle clicks fall through to the <Link> so the standalone
+    // /item/<id> page opens in a new tab.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    // Plain tap → open the client overlay instantly (no navigation). The overlay
+    // owns the URL from here (see DetailOverlay).
+    e.preventDefault();
+    if (cardRef.current) openMorph(item, cardRef.current.getBoundingClientRect());
     logEngagement(item.id, "click");
   };
 
@@ -297,10 +305,10 @@ export function PinCard({
 
       <Link
         href={`/item/${item.id}`}
-        // No prefetch: on an infinite wall this would fire hundreds of RSC probes
-        // as tiles enter view (Next's own recommendation for long link lists). The
-        // detail route is force-dynamic — never prefetched anyway — and commits
-        // fast on tap via its single-row query, so nothing is lost.
+        // A plain tap opens the client overlay (onTap preventDefaults) — the href
+        // exists for accessibility, SSR/no-JS, and modifier/middle-click "open in
+        // new tab" (→ the standalone page). No prefetch: an infinite wall would
+        // otherwise fire hundreds of RSC probes, and the overlay needs no fetch.
         prefetch={false}
         onClick={onTap}
         className="block focus-visible:outline-none"

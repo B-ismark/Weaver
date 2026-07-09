@@ -2,32 +2,30 @@
 
 import Image from "next/image";
 import { m } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FeedItem } from "@/lib/feed";
 import { shouldOptimize } from "@/lib/imageHost";
-import { readMorph, beginCloseMorph, closeMorph } from "./morph/morphStore";
+import { MasonryFeed } from "./MasonryFeed";
+import { SkeletonFeed } from "./SkeletonFeed";
 import { SourceOutLink } from "./SourceOutLink";
 import { ItemActions } from "./ItemActions";
 import { TasteNudge } from "./TasteNudge";
 
 /**
- * The enlarged detail view rendered as an OVERLAY (the `@modal` slot), on top of
- * the still-mounted feed. This is what makes the Pinterest-style opening possible:
- * because the grid underneath never unmounts, the hero can FLIP out of the tapped
- * tile and the neighbouring tiles can be pushed aside (see MorphContext + PinCard).
+ * The enlarged detail view, rendered as a CLIENT overlay by <DetailOverlay/> (which
+ * owns the morph store + URL). Presentational + self-animating: it receives the
+ * item, the source-tile rect, the phase, and a `seq` that bumps on every open/drill.
  *
- * Morph technique — a CONTROLLED FLIP, not Motion's `layoutId`:
- *   `layoutId` is the textbook tool for a thumbnail→fullscreen morph, but across
- *   a Next parallel-route boundary the *close* is fragile — the router unmounts
- *   this slot before Motion can play the reverse. So we drive it ourselves: the
- *   hero renders at its final (target) box and we animate a transform FROM the
- *   source tile's rect TO identity on open, and back to the tile's LIVE rect on
- *   close. Deterministic in both directions, full spring control, and it only
- *   needs transforms (so the app keeps Motion's lean `domAnimation` bundle).
+ * Instant by construction: the tapped tile already carries everything the hero
+ * needs (fullUrl/thumbUrl/dims/caption), so the overlay opens and the hero FLIPs
+ * the SAME frame as the tap — no route fetch gates it. "More like this" streams in
+ * afterwards via /api/similar behind a skeleton.
  *
- * The spring is tuned to the brief: ~0.4s response, ~0.8 damping → a soft,
- * tactile overshoot as the image settles at full size.
+ * Morph — a controlled FLIP: the hero renders at its final (target) box and a
+ * transform animates it FROM the source rect on open, and back to the tile's LIVE
+ * rect on close. Keying the hero on `seq` means a drill (tapping a related tile)
+ * remounts it → it flies up out of the tapped thumbnail. Spring tuned to the brief:
+ * ~0.4s response, ~0.8 damping → a soft, tactile overshoot.
  */
 const SPRING = { type: "spring", stiffness: 210, damping: 26 } as const;
 const BACKDROP = 0.82;
@@ -43,7 +41,6 @@ function reduceMotion() {
 type Box = { left: number; top: number; width: number; height: number };
 type From = { x: number; y: number; scale: number };
 
-/** The hero's on-screen box (contain-fit, centred, pinned near the top). */
 function targetBox(item: FeedItem): Box {
   if (typeof document === "undefined") return { left: 0, top: 0, width: 0, height: 0 };
   const vw = document.documentElement.clientWidth;
@@ -61,32 +58,15 @@ function targetBox(item: FeedItem): Box {
   return { left: (vw - width) / 2, top: MARGIN_TOP, width, height };
 }
 
-/** The transform that places the hero exactly over `origin` (the tile rect). */
 function flipFrom(origin: Box, target: Box): From {
   return {
-    scale: origin.width / target.width,
+    scale: target.width > 0 ? origin.width / target.width : 1,
     x: origin.left + origin.width / 2 - (target.left + target.width / 2),
     y: origin.top + origin.height / 2 - (target.top + target.height / 2),
   };
 }
 
-/** The open geometry: the hero's target box + the transform that starts it over
- * the source tile (null on a deep link, where there's no tile to fly from). */
-function computeGeom(item: FeedItem, src: { id: string; rect: DOMRect } | null) {
-  const target = targetBox(item);
-  const origin = src && src.id === item.id ? src.rect : null;
-  return {
-    target,
-    from: origin
-      ? flipFrom(
-          { left: origin.left, top: origin.top, width: origin.width, height: origin.height },
-          target
-        )
-      : null,
-  };
-}
-
-/** The source tile's CURRENT rect (it stays mounted underneath, just hidden). */
+/** The source tile's CURRENT rect (feed stays mounted underneath). */
 function liveTileRect(id: string): Box | null {
   const sel = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : id;
   const el = document.querySelector(`[data-morph-id="${sel}"]`);
@@ -95,39 +75,116 @@ function liveTileRect(id: string): Box | null {
   return { left: r.left, top: r.top, width: r.width, height: r.height };
 }
 
-export function Lightbox({ item, similar }: { item: FeedItem; similar?: React.ReactNode }) {
-  const router = useRouter();
+/**
+ * "More like this", client-fetched. Mounted fresh per item (keyed by the caller),
+ * so its loading state resets on a drill without any reset-in-effect.
+ */
+function RelatedGrid({ itemId }: { itemId: string }) {
+  const [items, setItems] = useState<FeedItem[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/similar?id=${encodeURIComponent(itemId)}`)
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d: { items?: FeedItem[] }) => {
+        if (!cancelled) setItems(d.items ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [itemId]);
+
+  return (
+    <section className="mt-10" aria-labelledby="lb-more-like-this">
+      <div className="mb-5 flex items-center gap-3">
+        <h2 id="lb-more-like-this" className="font-display text-lg font-semibold tracking-tight">
+          Threads from this
+        </h2>
+        <span aria-hidden="true" className="h-px flex-1 bg-accent/40" />
+      </div>
+      {items === null ? (
+        <SkeletonFeed count={6} />
+      ) : items.length > 0 ? (
+        // Tapping a related tile drills the overlay into it (morph=false = no
+        // neighbour reflow inside the overlay).
+        <MasonryFeed items={items} morph={false} />
+      ) : (
+        <p className="text-sm text-muted">No threads yet.</p>
+      )}
+    </section>
+  );
+}
+
+/** Keyed per item so the thumb→full crossfade resets on each open/drill. */
+function HeroImage({ item }: { item: FeedItem }) {
+  const [fullLoaded, setFullLoaded] = useState(false);
+  return (
+    <>
+      {/* Thumb (already grid-decoded) paints instantly — the morph flies with real
+          pixels frame 1. Full-res fades in over it once decoded. */}
+      <Image
+        src={item.thumbUrl}
+        alt=""
+        fill
+        sizes="100vw"
+        priority
+        unoptimized={!shouldOptimize(item.thumbUrl)}
+        className="object-cover"
+      />
+      <Image
+        src={item.fullUrl}
+        alt={item.caption || "Image"}
+        fill
+        sizes="100vw"
+        priority
+        unoptimized={!shouldOptimize(item.fullUrl)}
+        onLoad={() => setFullLoaded(true)}
+        className={`object-cover transition-opacity duration-300 ${
+          fullLoaded ? "opacity-100" : "opacity-0"
+        }`}
+      />
+    </>
+  );
+}
+
+export function Lightbox({
+  item,
+  rect,
+  phase,
+  seq,
+  onRequestClose,
+  onClosed,
+}: {
+  item: FeedItem;
+  rect: DOMRect | null;
+  phase: "open" | "closing";
+  seq: number;
+  onRequestClose: () => void;
+  onClosed: () => void;
+}) {
   const reduce = reduceMotion();
 
-  // Capture the morph source ONCE, on mount. On a soft navigation the tapped tile
-  // has already published its rect; on a hard load (deep link) there's no source
-  // → we fall back to a gentle scale-in instead of a FLIP. Computed via a lazy
-  // useState initialiser (not a ref) so it's read-safe during render. This overlay
-  // only ever renders client-side (the intercepted @modal slot), so `document` is
-  // always available here.
-  const [geom] = useState(() => computeGeom(item, readMorph()));
+  // Geometry is stable within a `seq`; a drill bumps seq → fresh FLIP-from.
+  const geom = useMemo(() => {
+    const target = targetBox(item);
+    const from = rect
+      ? flipFrom({ left: rect.left, top: rect.top, width: rect.width, height: rect.height }, target)
+      : null;
+    return { target, from };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seq]);
   const { target, from } = geom;
 
-  // Drive open → closing as a tiny state machine. `out` holds the reverse target,
-  // computed against the tile's live position at the moment the user closes.
-  const [phase, setPhase] = useState<"in" | "out">("in");
-  const [out, setOut] = useState<From | null>(null);
-  const [fullLoaded, setFullLoaded] = useState(false);
-  const closingRef = useRef(false);
-
-  const startClose = useCallback(() => {
-    if (closingRef.current) return;
-    closingRef.current = true;
-    beginCloseMorph(); // neighbours settle back now; source tile stays hidden
-    const live = liveTileRect(item.id);
-    setOut(live ? flipFrom(live, target) : from);
-    setPhase("out");
-  }, [item.id, target, from]);
-
-  const finishClose = useCallback(() => {
-    closeMorph(); // reveal the source tile exactly where the hero landed
-    router.back();
-  }, [router]);
+  // Reverse target: fly back to the tile's live position (feed stays mounted). A
+  // drilled item usually isn't in the feed → no live tile → shrink-fade instead.
+  const out = useMemo(() => {
+    if (phase !== "closing") return null;
+    const live = liveTileRect(item.id) ?? (rect ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : null);
+    return live ? flipFrom(live, target) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, seq]);
 
   // Lock the background from scrolling while the overlay owns the screen.
   useEffect(() => {
@@ -138,26 +195,18 @@ export function Lightbox({ item, similar }: { item: FeedItem; similar?: React.Re
     };
   }, []);
 
-  // Escape closes with the reverse morph; resize closes instantly (its geometry
-  // would be stale — matching the tile menu's dismiss-on-resize behaviour).
+  // Escape reverses; resize closes (its geometry would be stale).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") startClose();
+      if (e.key === "Escape") onRequestClose();
     };
     window.addEventListener("keydown", onKey);
-    window.addEventListener("resize", startClose);
+    window.addEventListener("resize", onRequestClose);
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", startClose);
+      window.removeEventListener("resize", onRequestClose);
     };
-  }, [startClose]);
-
-  // Safety net: if this slot unmounts by any path we didn't drive (hardware Back,
-  // forward nav), still clear the morph so the source tile is revealed rather than
-  // left permanently hidden.
-  useEffect(() => {
-    return () => closeMorph();
-  }, []);
+  }, [onRequestClose]);
 
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -171,7 +220,7 @@ export function Lightbox({ item, similar }: { item: FeedItem; similar?: React.Re
       : { opacity: 0, scale: 0.96, borderRadius: 14 };
 
   const heroAnimate =
-    phase === "out"
+    phase === "closing"
       ? reduce
         ? { opacity: 0 }
         : out
@@ -188,21 +237,19 @@ export function Lightbox({ item, similar }: { item: FeedItem; similar?: React.Re
       aria-label={item.caption || "Image detail"}
       className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain"
     >
-      {/* Backdrop — dim, not opaque, so the woven wall still reads faintly behind. */}
       <m.div
         aria-hidden="true"
-        onClick={startClose}
+        onClick={onRequestClose}
         className="fixed inset-0 bg-black"
         initial={{ opacity: 0 }}
-        animate={{ opacity: phase === "out" ? 0 : BACKDROP }}
+        animate={{ opacity: phase === "closing" ? 0 : BACKDROP }}
         transition={{ duration: reduce ? 0.15 : 0.28, ease: "easeOut" }}
       />
 
-      {/* Close */}
       <button
         ref={closeBtnRef}
         type="button"
-        onClick={startClose}
+        onClick={onRequestClose}
         aria-label="Close"
         className="fixed right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-background/85 text-foreground shadow-lg backdrop-blur transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
@@ -211,8 +258,9 @@ export function Lightbox({ item, similar }: { item: FeedItem; similar?: React.Re
         </svg>
       </button>
 
-      {/* The morphing hero. Sized to its final box; a transform does the flight. */}
+      {/* Hero — keyed on seq so a drill remounts it and flies from the new rect. */}
       <m.div
+        key={seq}
         className="relative z-[1] overflow-hidden bg-surface shadow-2xl"
         style={{
           width: target.width,
@@ -227,42 +275,19 @@ export function Lightbox({ item, similar }: { item: FeedItem; similar?: React.Re
         animate={heroAnimate}
         transition={reduce ? { duration: 0.2 } : SPRING}
         onAnimationComplete={() => {
-          if (phase === "out") finishClose();
+          if (phase === "closing") onClosed();
         }}
       >
-        {/* Thumb-first: the grid already decoded this thumbUrl, so it paints
-            INSTANTLY — the hero flies with real pixels from frame 1 instead of a
-            blank box while the full-res loads (the mobile feed-tap path). */}
-        <Image
-          src={item.thumbUrl}
-          alt=""
-          fill
-          sizes="100vw"
-          priority
-          unoptimized={!shouldOptimize(item.thumbUrl)}
-          className="object-cover"
-        />
-        {/* Full-res fades in over the thumb once decoded — sharpens after the morph. */}
-        <Image
-          src={item.fullUrl}
-          alt={item.caption || "Image"}
-          fill
-          sizes="100vw"
-          priority
-          unoptimized={!shouldOptimize(item.fullUrl)}
-          onLoad={() => setFullLoaded(true)}
-          className={`object-cover transition-opacity duration-300 ${
-            fullLoaded ? "opacity-100" : "opacity-0"
-          }`}
-        />
+        <HeroImage item={item} />
       </m.div>
 
-      {/* Meta + actions + "more like this" scroll below the hero (Pinterest closeup). */}
+      {/* Meta + actions + related. Keyed on item so it re-reveals on a drill. */}
       <m.div
+        key={`meta-${item.id}`}
         className="relative z-[1] mx-auto w-full max-w-3xl px-4 pb-16 pt-6"
         initial={{ opacity: 0, y: reduce ? 0 : 10 }}
-        animate={{ opacity: phase === "out" ? 0 : 1, y: 0 }}
-        transition={{ duration: 0.3, delay: phase === "out" ? 0 : 0.12, ease: "easeOut" }}
+        animate={{ opacity: phase === "closing" ? 0 : 1, y: 0 }}
+        transition={{ duration: 0.3, delay: phase === "closing" ? 0 : 0.12, ease: "easeOut" }}
       >
         <div className="flex flex-col gap-4 rounded-2xl border border-surface bg-background/80 p-5 backdrop-blur">
           {item.caption && (
@@ -279,7 +304,9 @@ export function Lightbox({ item, similar }: { item: FeedItem; similar?: React.Re
           <TasteNudge itemId={item.id} />
         </div>
 
-        {similar}
+        {/* Threads from this — related grid, keyed per item so it refetches +
+            resets its skeleton on a drill. */}
+        <RelatedGrid key={item.id} itemId={item.id} />
       </m.div>
     </div>
   );

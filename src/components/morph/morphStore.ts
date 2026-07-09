@@ -1,64 +1,77 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+import type { FeedItem } from "@/lib/feed";
+
 /**
- * Coordinates the tile → detail "shared element" morph and the surrounding
- * spatial reflow, ACROSS the parallel-route boundary (the feed lives in the
- * `children` slot, the enlarged view in the `@modal` slot — see app/layout).
+ * Drives the tile → detail overlay and the surrounding spatial reflow.
  *
  * A module-level singleton (like likedStore / hiddenStore / undoStore), NOT React
- * state, for two reasons:
- *   1. Only ever one morph is open at a time — a singleton models that exactly.
- *   2. A discovery wall holds hundreds of mounted tiles. If the active entry were
- *      React state, opening one tile would re-render every tile on the exact frame
- *      the morph starts — a jank spike. Instead tiles `subscribe` and, in the
- *      callback, imperatively animate their own DOM node. Zero React renders on
- *      open/close; each tile self-gates on viewport visibility.
+ * state, so opening a tile never re-renders the (potentially hundreds of) mounted
+ * feed tiles: tiles `subscribeMorph` and imperatively animate their own node. The
+ * ONE persistent <DetailOverlay/> reads it reactively via `useMorphState`.
  *
- * `phase` splits the close into two beats so it reads organically:
- *   - `open`    : source tile hidden as the hero flies home is deferred; neighbours
- *                 pushed out (source stays visible, occluded by the overlay).
- *   - `closing` : neighbours settle back WHILE the hero flies home; the source tile
- *                 is hidden so there's never a double image mid-flight.
- *   - (null)    : fully closed — the source tile is revealed again.
+ * The overlay is fully CLIENT-side and opens instantly from the tapped item's data
+ * (the grid already has `fullUrl`/`thumbUrl`/dims/caption) — no route fetch gates
+ * the morph, so the hero flies the same frame the tap lands. Tapping a tile inside
+ * the overlay's "Threads from this" simply calls `openMorph` again with the new
+ * item → the overlay morphs into it (a drill), tracked by `seq`.
+ *
+ * `phase` splits the close so neighbours settle back WHILE the hero flies home:
+ *   - `open`    : hero at full size, neighbours pushed out.
+ *   - `closing` : neighbours return, hero flies back to the source tile.
+ *   - (null)    : closed — the source tile is revealed again.
  */
-export type MorphActive = { id: string; rect: DOMRect; phase: "open" | "closing" } | null;
+export type MorphState = {
+  item: FeedItem;
+  /** Source tile rect for the FLIP; null → gentle scale-in (e.g. drill/back). */
+  rect: DOMRect | null;
+  phase: "open" | "closing";
+  /** Bumps on every open/drill so the overlay re-runs the FLIP from the new rect. */
+  seq: number;
+} | null;
 
-let active: MorphActive = null;
+let state: MorphState = null;
+let seq = 0;
 const subscribers = new Set<() => void>();
 
 function emit() {
   for (const s of subscribers) s();
 }
 
-/** A tile was tapped: record it as the morph source and notify subscribers. */
-export function openMorph(id: string, rect: DOMRect) {
-  active = { id, rect, phase: "open" };
+/** Open (or drill into) an item. Captures the source tile rect for the FLIP. */
+export function openMorph(item: FeedItem, rect: DOMRect | null) {
+  seq += 1;
+  state = { item, rect, phase: "open", seq };
   emit();
 }
 
-/** Reverse has started: settle neighbours back, keep the source tile hidden. */
+/** Reverse has started: settle neighbours back, hero flies home. */
 export function beginCloseMorph() {
-  if (!active || active.phase === "closing") return;
-  active = { ...active, phase: "closing" };
+  if (!state || state.phase === "closing") return;
+  state = { ...state, phase: "closing" };
   emit();
 }
 
 /** The hero has landed: clear the source and reveal the tile. */
 export function closeMorph() {
-  if (!active) return;
-  active = null;
+  if (!state) return;
+  state = null;
   emit();
 }
 
-/** Current morph source (null when nothing is open). */
-export function readMorph(): MorphActive {
-  return active;
+export function readMorph(): MorphState {
+  return state;
 }
 
-/** Subscribe to open/close; returns an unsubscribe. */
 export function subscribeMorph(cb: () => void): () => void {
   subscribers.add(cb);
   return () => {
     subscribers.delete(cb);
   };
+}
+
+/** Reactive view for the overlay host (re-renders on open/drill/close). */
+export function useMorphState(): MorphState {
+  return useSyncExternalStore(subscribeMorph, readMorph, () => null);
 }

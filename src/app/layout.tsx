@@ -6,6 +6,7 @@ import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { WeaverBackground } from "@/components/WeaverBackground";
 import { SilkMotes } from "@/components/SilkMotes";
 import { MotionProvider } from "@/components/motion/MotionProvider";
+import { DetailOverlay } from "@/components/morph/DetailOverlay";
 import { UndoToast } from "@/components/UndoToast";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -33,10 +34,7 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
-  children,
-  modal,
-}: Readonly<{ children: React.ReactNode; modal?: React.ReactNode }>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
       lang="en"
@@ -49,13 +47,14 @@ export default function RootLayout({
         </a>
         <WeaverBackground />
         <SilkMotes />
-        {/* The feed (`children`) and the intercepted detail overlay (`modal`, null
-            by default) render side by side. The tile→hero morph + neighbour reflow
-            coordinate across this parallel-route boundary via the module-level
-            morphStore, so no shared provider is needed. */}
         <MotionProvider>
           {children}
-          {modal}
+          {/* The detail view is a single, always-mounted CLIENT overlay driven by
+              the module-level morphStore — so tapping a tile opens it instantly (no
+              route, no fetch) and the feed underneath never unmounts. It manages its
+              own URL (/item/<id>) via history; a hard load of that URL renders the
+              standalone page instead. */}
+          <DetailOverlay />
         </MotionProvider>
         <footer className="mt-auto border-t border-surface px-4 py-4 text-center text-xs text-muted">
           <Link href="/privacy" className="hover:text-foreground">
