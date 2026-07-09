@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { m } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { FeedItem } from "@/lib/feed";
 import { shouldOptimize } from "@/lib/imageHost";
 import { MasonryFeed } from "./MasonryFeed";
@@ -138,10 +138,13 @@ function HeroImage({ item }: { item: FeedItem }) {
         alt={item.caption || "Image"}
         fill
         sizes="100vw"
+        // Hero is the largest the image is ever shown — request it sharp (only
+        // applies to Next-optimized sources; hotlinked/unoptimized serve native).
+        quality={90}
         priority
         unoptimized={!shouldOptimize(item.fullUrl)}
         onLoad={() => setFullLoaded(true)}
-        className={`object-cover transition-opacity duration-300 ${
+        className={`object-contain transition-opacity duration-300 ${
           fullLoaded ? "opacity-100" : "opacity-0"
         }`}
       />
@@ -213,6 +216,15 @@ export function Lightbox({
     closeBtnRef.current?.focus();
   }, []);
 
+  // Reset the overlay's scroll to the top on open AND on every drill (seq bump),
+  // so the new hero is in view rather than wherever the related grid was scrolled
+  // to — and so the FLIP lands at the top (the hero's flow position assumes
+  // scrollTop 0). Layout effect → happens before paint, no scrolled-flash.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    scrollRef.current?.scrollTo(0, 0);
+  }, [seq]);
+
   const heroInitial = reduce
     ? { opacity: 0 }
     : from
@@ -232,6 +244,7 @@ export function Lightbox({
 
   return (
     <div
+      ref={scrollRef}
       role="dialog"
       aria-modal="true"
       aria-label={item.caption || "Image detail"}
