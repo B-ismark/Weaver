@@ -235,7 +235,12 @@ export function Lightbox({
       role="dialog"
       aria-modal="true"
       aria-label={item.caption || "Image detail"}
-      className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain"
+      // While closing, stop eating clicks — the hero keeps flying home (visual
+      // only) but the grid underneath is immediately interactive again, instead of
+      // being dead for the whole reverse animation.
+      className={`fixed inset-0 z-[60] overflow-y-auto overscroll-contain ${
+        phase === "closing" ? "pointer-events-none" : ""
+      }`}
     >
       <m.div
         aria-hidden="true"
@@ -273,7 +278,15 @@ export function Lightbox({
         }}
         initial={heroInitial}
         animate={heroAnimate}
-        transition={reduce ? { duration: 0.2 } : SPRING}
+        // Open springs (soft overshoot); close is a short deterministic tween so it
+        // unmounts fast instead of dragging out a spring's settle tail.
+        transition={
+          reduce
+            ? { duration: 0.2 }
+            : phase === "closing"
+              ? { duration: 0.32, ease: [0.4, 0, 0.2, 1] }
+              : SPRING
+        }
         onAnimationComplete={() => {
           if (phase === "closing") onClosed();
         }}
