@@ -29,13 +29,17 @@ export function UndoToast() {
         >
           <div className="pointer-events-auto flex items-center gap-4 rounded-full border border-surface bg-background/95 py-2 pl-5 pr-2 text-sm shadow-xl backdrop-blur">
             <span className="text-foreground">{entry.label}</span>
-            <button
-              type="button"
-              onClick={runUndo}
-              className="rounded-full bg-accent/15 px-4 py-1.5 font-medium text-accent transition-colors hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Undo
-            </button>
+            {/* Undo only for reversible actions (hide); a nudge confirmation has
+                no `undo` and just auto-dismisses. */}
+            {entry.undo && (
+              <button
+                type="button"
+                onClick={runUndo}
+                className="rounded-full bg-accent/15 px-4 py-1.5 font-medium text-accent transition-colors hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Undo
+              </button>
+            )}
             <button
               type="button"
               onClick={dismissUndo}
