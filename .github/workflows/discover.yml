@@ -9,7 +9,8 @@ name: Weaver auto-refresh
 #
 # Repo secrets required for discovery (the app's server env):
 #   NEXT_PUBLIC_SUPABASE_URL   SUPABASE_SECRET_KEY   EMBED_ENDPOINT   EMBED_TOKEN
-# Optional: EUROPEANA_KEY, SMITHSONIAN_API_KEY, RSS_FEEDS, DISCOVERY_PROXY_URL.
+# Optional: EUROPEANA_KEY, SMITHSONIAN_API_KEY, RSS_FEEDS, DISCOVERY_PROXY_URL,
+#   REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET (reddit source; else it no-ops).
 # Still used by the Pinterest/recluster steps: APP_URL, CRON_SECRET.
 
 on:
@@ -63,10 +64,14 @@ jobs:
           SMITHSONIAN_API_KEY: ${{ secrets.SMITHSONIAN_API_KEY }}
           RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
           DISCOVERY_PROXY_URL: ${{ secrets.DISCOVERY_PROXY_URL }}
+          # Reddit app-only OAuth (free): create a "web app" at reddit.com/prefs/apps.
+          # Without these (and no proxy) the reddit source degrades to an empty batch.
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
           # No 60s cap here → embed a lot more per run than the Vercel route can.
           DISCOVERY_EMBED_CAP: "500"
         # Sweep the open sources; each is isolated (a failure is logged, not fatal).
-        run: npm run discover -- arena openverse artic metmuseum wikimedia cleveland nasa europeana smithsonian rss
+        run: npm run discover -- arena openverse reddit artic metmuseum wikimedia cleveland nasa europeana smithsonian rss
 
       - name: Sync Pinterest saved pins (taste signal)
         run: |
