@@ -7,11 +7,14 @@ import type { NextConfig } from "next";
  *   from platform CDNs (§5). Placeholder data uses picsum during Phase 0.
  */
 const nextConfig: NextConfig = {
-  // React <ViewTransition> for native, dependency-free route animations: the
-  // feed thumbnail morphs into the detail hero (shared-element continuity).
-  // Progressive — unsupported browsers just navigate without the morph.
   experimental: {
-    viewTransition: true,
+    // NOTE: the `viewTransition` experiment was removed. The tile→detail morph is
+    // now a Motion-driven FLIP in an @modal overlay (Lightbox + morphStore), not a
+    // native View Transition. Leaving the experiment on wrapped EVERY navigation in
+    // document.startViewTransition, which snapshotted the whole masonry wall (slow),
+    // fought the Motion FLIP (janky slide), and promoted the `site-header`
+    // view-transition-name into the top layer above the overlay backdrop.
+    //
     // Cache the dynamic home + detail RSC in the client router for a short window
     // so back/forward navigation reuses it instead of refetching. Without this the
     // force-dynamic home refetches on every router.back(), and feed_by_taste's

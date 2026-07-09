@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Suspense, ViewTransition } from "react";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getItemById, getSimilarItems } from "@/lib/items";
 import { shouldOptimize } from "@/lib/imageHost";
@@ -61,21 +61,19 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
                 priority
               />
             )}
-            {/* Full-resolution, hotlinked (§5.2). Same name as the feed thumbnail →
-                the tile morphs into this hero. default="none" mirrors PinCard: the
-                hero only animates as the shared element, never on the Suspense
-                reveal below. */}
-            <ViewTransition name={`item-${item.id}`} share="morph" default="none">
-              <Image
-                src={item.fullUrl}
-                alt={item.caption || "Image"}
-                fill
-                sizes="(max-width: 768px) 100vw, 66vw"
-                unoptimized={!shouldOptimize(item.fullUrl)}
-                className="object-contain"
-                priority
-              />
-            </ViewTransition>
+            {/* Full-resolution, hotlinked (§5.2), fading in over the thumb underlay.
+                This standalone page is the hard-load / deep-link fallback; the
+                in-app morph is the Motion FLIP overlay (Lightbox), not a View
+                Transition. */}
+            <Image
+              src={item.fullUrl}
+              alt={item.caption || "Image"}
+              fill
+              sizes="(max-width: 768px) 100vw, 66vw"
+              unoptimized={!shouldOptimize(item.fullUrl)}
+              className="object-contain"
+              priority
+            />
           </div>
 
           <Reveal className="flex flex-col gap-4" delay={0.1}>
