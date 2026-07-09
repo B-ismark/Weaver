@@ -31,14 +31,11 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <AppHeader />
+      {/* Back lives in the sticky header (far left) so it stays pinned to the top
+          and is always reachable while scrolling the detail view. */}
+      <AppHeader leading={<BackButton />} />
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
-        {/* Back sits between the nav and the image, not in the nav, so the nav
-            stays identical to the feed and anchors the morph. */}
-        <div className="mb-4">
-          <BackButton />
-        </div>
         <div className="grid gap-6 md:grid-cols-[2fr_1fr]">
           {/* Full-resolution, hotlinked (§5.2). Falls back to source link on 403. */}
           <div

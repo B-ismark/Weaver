@@ -134,6 +134,11 @@ export function PinCard({
 
       <Link
         href={`/item/${item.id}`}
+        // No prefetch: on an infinite wall this would fire hundreds of RSC probes
+        // as tiles enter view (Next's own recommendation for long link lists). The
+        // detail route is force-dynamic — never prefetched anyway — and commits
+        // fast on tap via its single-row query, so nothing is lost.
+        prefetch={false}
         onClick={(e) => {
           // A touch long-press synthesises a click on release — swallow it so
           // opening the menu doesn't also open the detail view.

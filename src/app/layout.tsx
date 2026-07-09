@@ -5,7 +5,6 @@ import "./globals.css";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { WeaverBackground } from "@/components/WeaverBackground";
 import { SilkMotes } from "@/components/SilkMotes";
-import { SmoothScroll } from "@/components/SmoothScroll";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -44,7 +43,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <a href="#feed" className="sr-only focusable">
           Skip to feed
         </a>
-        <SmoothScroll />
         <WeaverBackground />
         <SilkMotes />
         <MotionProvider>{children}</MotionProvider>

@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { scrollToTop } from "@/lib/lenis";
+import { scrollToTop } from "@/lib/scroll";
 
 /**
  * Floating "back to top" control. On a long discovery feed you often want to jump
  * back up after diving deep — but a persistent button clutters the wall. So it
  * only reveals once you've scrolled well down AND begin scrolling back UP (the
  * moment you're heading toward the top), then hides again the instant you resume
- * scrolling down or reach the top. Tapping it glides to the top on the shared
- * Lenis timeline (native smooth as a fallback).
+ * scrolling down or reach the top. Tapping it scrolls smoothly to the top
+ * (native smooth scroll; instant under reduced-motion).
  *
  * a11y: a real button with a label; the reveal is a simple fade so it's calm
  * under prefers-reduced-motion (motion is opacity-only, no travel).

@@ -3,8 +3,8 @@ import Link from "next/link";
 /**
  * Shared editorial header shell. A serif wordmark with a small gold "hub" glyph
  * (the orb-weaver motif). Page-specific controls (nav, search) are passed as
- * `children` and sit on the right; an optional `leading` slot sits just after the
- * wordmark on the left (e.g. a Back button). The wordmark always routes home.
+ * `children` and sit on the right; an optional `leading` slot sits at the far
+ * left, before the wordmark (e.g. a Back button). The wordmark always routes home.
  *
  * Modular by design: every page composes this instead of re-declaring the sticky
  * shell, so header styling stays in one place (foundational: modularity).
@@ -26,6 +26,7 @@ export function SiteHeader({
       style={{ viewTransitionName: "site-header" }}
     >
       <div className={`mx-auto flex ${maxWidth} items-center gap-2 px-4 py-3 sm:gap-4`}>
+        {leading}
         <Link
           href="/"
           aria-label="Weaver home"
@@ -40,7 +41,6 @@ export function SiteHeader({
             Weaver
           </span>
         </Link>
-        {leading}
         <div className="flex flex-1 items-center justify-end gap-2 sm:gap-4">{children}</div>
       </div>
     </header>

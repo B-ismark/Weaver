@@ -117,22 +117,6 @@ body {
   animation: weave-shimmer 1.4s ease-in-out infinite;
 }
 
-/* Lenis smooth scroll (see SmoothScroll). Recommended rules from the Lenis docs
-   so the library owns the scroll timeline without fighting native behaviour. */
-html.lenis,
-html.lenis body {
-  height: auto;
-}
-.lenis.lenis-smooth {
-  scroll-behavior: auto !important;
-}
-.lenis.lenis-smooth [data-lenis-prevent] {
-  overscroll-behavior: contain;
-}
-.lenis.lenis-stopped {
-  overflow: hidden;
-}
-
 /* View Transitions (feed thumbnail → detail hero morph). The `share="morph"`
    prop tags the transition with the `.morph` class.
 

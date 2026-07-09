@@ -12,6 +12,15 @@ const nextConfig: NextConfig = {
   // Progressive — unsupported browsers just navigate without the morph.
   experimental: {
     viewTransition: true,
+    // Cache the dynamic home + detail RSC in the client router for a short window
+    // so back/forward navigation reuses it instead of refetching. Without this the
+    // force-dynamic home refetches on every router.back(), and feed_by_taste's
+    // per-call jitter re-randomises the order — the "reshuffle on back" bug. The
+    // client-side scroll/feed snapshot (InfiniteFeed) then restores the full list
+    // and scroll position on top of the cached shell.
+    staleTimes: {
+      dynamic: 30,
+    },
   },
   images: {
     remotePatterns: [

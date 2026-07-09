@@ -19,12 +19,12 @@ export function BackButton() {
         if (window.history.length > 1) router.back();
         else router.push("/");
       }}
-      className="flex shrink-0 items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md px-1"
+      className="-ml-1 flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-sm text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       aria-label="Back to feed"
     >
       <svg
-        width="16"
-        height="16"
+        width="18"
+        height="18"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -35,7 +35,9 @@ export function BackButton() {
       >
         <path d="m15 18-6-6 6-6" />
       </svg>
-      Back
+      {/* Label on wider screens; the icon + aria-label carry it on phones, where
+          header space is tight. */}
+      <span className="hidden sm:inline">Back</span>
     </button>
   );
 }
