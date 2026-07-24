@@ -3,21 +3,41 @@ import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, expectedToken } from "@/lib/auth";
 
 /**
- * The gate (single-user passcode). Everything is protected EXCEPT:
- *   - public pages: /login, /privacy (Pinterest needs this reachable)
- *   - OAuth return: /api/pinterest/callback (Pinterest redirects here)
- *   - the login API itself
+ * The gate (single-user passcode). Weaver is public-facing: anyone may BROWSE, but
+ * only the owner may MANAGE taste or reach the management surfaces.
+ *
+ * PUBLIC (no passcode):
+ *   - the browse surface: the home feed (/), item detail (/item/*), and the read
+ *     APIs that power them (/api/feed, /api/similar)
+ *   - system pages: /login, /privacy (Pinterest needs this reachable)
+ *   - OAuth return: /api/pinterest/callback, and the login API itself
  *   - cron endpoints, when they carry the CRON_SECRET bearer (GitHub Actions)
+ *
+ * OWNER-ONLY (everything else — requires the session cookie):
+ *   - management pages: /search, /library, /taste, /add, /import
+ *   - every taste-mutating / ingest API: /api/signal, /api/events, /api/impression,
+ *     /api/keywords, /api/share, /api/import, /api/discover, /api/recluster,
+ *     /api/pinterest/*
+ * Gating those APIs is what stops a visitor polluting the single global taste.
  * Static assets are excluded via the matcher.
  *
  * Owner access = a session cookie (set by /api/auth/login). No passcode set →
- * gate is open (local dev). This is the single source of auth, so the cron
- * routes no longer self-check the secret — proxy does it here.
+ * gate is open (local dev), everyone is the owner. This is the single source of
+ * auth, so the cron routes no longer self-check the secret — proxy does it here.
  */
-const PUBLIC = ["/login", "/privacy", "/api/auth/login", "/api/pinterest/callback"];
+const PUBLIC = [
+  "/login",
+  "/privacy",
+  "/api/auth/login",
+  "/api/pinterest/callback",
+  "/api/feed",
+  "/api/similar",
+];
 const CRON_PATHS = ["/api/discover", "/api/pinterest/sync", "/api/recluster"];
 
 function isPublic(pathname: string): boolean {
+  // The browse surface: the home feed and any item-detail page/deep-link.
+  if (pathname === "/" || pathname === "/item" || pathname.startsWith("/item/")) return true;
   return PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 

@@ -8,6 +8,8 @@ import { SilkMotes } from "@/components/SilkMotes";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 import { DetailOverlay } from "@/components/morph/DetailOverlay";
 import { UndoToast } from "@/components/UndoToast";
+import { OwnerProvider } from "@/components/OwnerProvider";
+import { isOwner } from "@/lib/owner";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -34,7 +36,10 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Computed once here (server) and broadcast via OwnerProvider so owner-only
+  // controls can hide themselves everywhere — feed tiles, detail actions, the nav.
+  const owner = await isOwner();
   return (
     <html
       lang="en"
@@ -47,15 +52,17 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </a>
         <WeaverBackground />
         <SilkMotes />
-        <MotionProvider>
-          {children}
-          {/* The detail view is a single, always-mounted CLIENT overlay driven by
-              the module-level morphStore — so tapping a tile opens it instantly (no
-              route, no fetch) and the feed underneath never unmounts. It manages its
-              own URL (/item/<id>) via history; a hard load of that URL renders the
-              standalone page instead. */}
-          <DetailOverlay />
-        </MotionProvider>
+        <OwnerProvider value={owner}>
+          <MotionProvider>
+            {children}
+            {/* The detail view is a single, always-mounted CLIENT overlay driven by
+                the module-level morphStore — so tapping a tile opens it instantly (no
+                route, no fetch) and the feed underneath never unmounts. It manages its
+                own URL (/item/<id>) via history; a hard load of that URL renders the
+                standalone page instead. */}
+            <DetailOverlay />
+          </MotionProvider>
+        </OwnerProvider>
         <footer className="mt-auto border-t border-surface px-4 py-4 text-center text-xs text-muted">
           <Link href="/privacy" className="hover:text-foreground">
             Privacy Policy

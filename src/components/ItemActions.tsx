@@ -7,6 +7,7 @@ import { unhideItem } from "@/lib/hiddenStore";
 import { sendSignal } from "@/lib/signals";
 import { showUndo } from "@/lib/undoStore";
 import { useHideItem } from "@/lib/useHideItem";
+import { useIsOwner } from "./OwnerProvider";
 import { reduceMotion, pop, silkBurst, snip } from "@/lib/tasteAnimations";
 
 /**
@@ -51,6 +52,9 @@ export function ItemActions({
   initialLiked?: boolean;
   onResolved?: (id: string) => void;
 }) {
+  // Owner-only: like / not-my-taste / share all steer the single global taste, so
+  // visitors don't get them (they still see the caption + "open on source" above).
+  const owner = useIsOwner();
   // Shared across all instances for this id (grid tile + detail), seeded from
   // the server-persisted value.
   const liked = useLiked(itemId, initialLiked);
@@ -122,6 +126,8 @@ export function ItemActions({
       setTimeout(() => setShared(""), 1600);
     }
   }
+
+  if (!owner) return null;
 
   const isBar = variant === "bar";
   const base =
