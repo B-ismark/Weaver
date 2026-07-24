@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { LoginForm } from "@/components/LoginForm";
 
 export const metadata = { title: "Sign in · Weaver" };
@@ -12,11 +13,21 @@ export default function LoginPage() {
           <span aria-hidden="true" className="inline-block size-2 rounded-full bg-accent" />
           <h1 className="font-display text-2xl font-semibold tracking-tight">Weaver</h1>
         </div>
-        <p className="mt-1 text-sm text-muted">Enter the passcode to continue.</p>
+        <p className="mt-1 text-sm text-muted">
+          Enter the passcode to manage Weaver, or browse as a guest.
+        </p>
       </div>
       <Suspense>
         <LoginForm />
       </Suspense>
+      {/* No passcode needed to browse: the feed + detail are public. This just
+          drops a guest straight onto the feed instead of stranding them here. */}
+      <Link
+        href="/"
+        className="text-center text-sm text-muted underline-offset-4 hover:text-foreground hover:underline"
+      >
+        Browse as guest →
+      </Link>
     </main>
   );
 }
