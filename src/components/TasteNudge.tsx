@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { sendSignal } from "@/lib/signals";
+import { useIsOwner } from "./OwnerProvider";
 
 /**
  * Soft taste steering on the detail view — "More like this" / "Less like this".
@@ -17,6 +18,9 @@ import { sendSignal } from "@/lib/signals";
  * live region confirms the nudge. No motion beyond the built-in active:scale.
  */
 export function TasteNudge({ itemId }: { itemId: string }) {
+  // Owner-only: nudging shifts the single global taste centroid, so it's hidden
+  // from visitors (proxy also 401s /api/signal for them).
+  const owner = useIsOwner();
   const [choice, setChoice] = useState<"" | "more" | "less">("");
   const [status, setStatus] = useState("");
 
@@ -25,6 +29,8 @@ export function TasteNudge({ itemId }: { itemId: string }) {
     setStatus(action === "more" ? "Tuned toward this style" : "Tuned away from this style");
     sendSignal(itemId, action).catch(() => {});
   }
+
+  if (!owner) return null;
 
   const btn =
     "flex-1 rounded-full border px-3 py-2 text-sm font-medium transition-[transform,background-color,border-color] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70";

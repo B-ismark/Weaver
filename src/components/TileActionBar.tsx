@@ -5,7 +5,7 @@ import { logEngagement } from "@/lib/engagement";
 import { useLiked, setLiked } from "@/lib/likedStore";
 import { hideItem, unhideItem } from "@/lib/hiddenStore";
 import { sendSignal } from "@/lib/signals";
-import { showUndo } from "@/lib/undoStore";
+import { showUndo, showToast } from "@/lib/undoStore";
 import { reduceMotion, pop, silkBurst, snip } from "@/lib/tasteAnimations";
 
 /**
@@ -113,11 +113,15 @@ export function TileActionBar({
         pop(icon);
         navigator.vibrate?.(10);
         sendSignal(itemId, "more").catch(() => {});
+        // The bar closes on commit, so the icon pop is barely seen — a toast is
+        // the lasting proof the nudge landed.
+        showToast("Tuned toward this style");
         break;
       case "less":
         pop(icon);
         navigator.vibrate?.(10);
         sendSignal(itemId, "less").catch(() => {});
+        showToast("Tuned away from this style");
         break;
       case "hide": {
         // Snip the scissors, THEN collapse — so the animation plays before the

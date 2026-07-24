@@ -3,8 +3,11 @@
 import { useRef, useState } from "react";
 import { logEngagement } from "@/lib/engagement";
 import { useLiked, setLiked } from "@/lib/likedStore";
+import { unhideItem } from "@/lib/hiddenStore";
 import { sendSignal } from "@/lib/signals";
+import { showUndo } from "@/lib/undoStore";
 import { useHideItem } from "@/lib/useHideItem";
+import { useIsOwner } from "./OwnerProvider";
 import { reduceMotion, pop, silkBurst, snip } from "@/lib/tasteAnimations";
 
 /**
@@ -28,6 +31,10 @@ function haptic(pattern: number | number[]) {
   if (typeof navigator !== "undefined") navigator.vibrate?.(pattern);
 }
 
+function trim(s: string, n = 24): string {
+  return s.length > n ? `${s.slice(0, n - 1)}…` : s;
+}
+
 export function ItemActions({
   itemId,
   sourceLink,
@@ -45,6 +52,9 @@ export function ItemActions({
   initialLiked?: boolean;
   onResolved?: (id: string) => void;
 }) {
+  // Owner-only: like / not-my-taste / share all steer the single global taste, so
+  // visitors don't get them (they still see the caption + "open on source" above).
+  const owner = useIsOwner();
   // Shared across all instances for this id (grid tile + detail), seeded from
   // the server-persisted value.
   const liked = useLiked(itemId, initialLiked);
@@ -87,6 +97,19 @@ export function ItemActions({
     const finish = () => {
       hide(itemId);
       onResolved?.(itemId);
+      // Same reversible affordance as the feed tile's action bar — a "Not my
+      // taste" here was previously silent + un-undoable. The overlay passes no
+      // onResolved, so the hide runs purely through hiddenStore, which unhide
+      // fully restores.
+      showUndo({
+        id: itemId,
+        label: caption ? `Hid “${trim(caption)}”` : "Removed from your feed",
+        undo: () => {
+          setHiding(false);
+          unhideItem(itemId);
+          sendSignal(itemId, "unhide").catch(() => {});
+        },
+      });
     };
     const d = reduceMotion() ? 0 : 340;
     if (d === 0) finish();
@@ -103,6 +126,8 @@ export function ItemActions({
       setTimeout(() => setShared(""), 1600);
     }
   }
+
+  if (!owner) return null;
 
   const isBar = variant === "bar";
   const base =

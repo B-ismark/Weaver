@@ -12,6 +12,7 @@ import { observeImpression } from "@/lib/impressions";
 import { markBroken } from "@/lib/brokenStore";
 import { openMorph, readMorph, subscribeMorph, type MorphState } from "./morph/morphStore";
 import { TileActionBar } from "./TileActionBar";
+import { useIsOwner } from "./OwnerProvider";
 
 // Long-press to summon the action bar; a drag past this many px first is a scroll,
 // not a press, so the bar never opens by accident (fixes the old "first tile
@@ -74,6 +75,13 @@ export function PinCard({
   const [errored, setErrored] = useState(false);
   const cardRef = useRef<HTMLElement>(null);
 
+  // Owner-only: the steering action bar (like / more / less / not-my-taste) and the
+  // impression + click tracking all feed the single global taste. Visitors get a
+  // read-only tile — they can still tap to open the detail overlay. `actions` gates
+  // every action affordance; `showActions` stays the caller's own opt-out.
+  const owner = useIsOwner();
+  const actions = showActions && owner;
+
   // `morph` now gates only the neighbour reflow; every tile opens the overlay on
   // tap regardless (secondary grids drill into it).
   const reflowEnabled = morph;
@@ -125,7 +133,7 @@ export function PinCard({
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (!showActions || barMode) return;
+    if (!actions || barMode) return;
     blockClick.current = false; // fresh gesture
     if (e.pointerType !== "touch") return; // pointer devices use hover, not press
     pointerId.current = e.pointerId;
@@ -159,7 +167,7 @@ export function PinCard({
 
   // Right-click (pointer): open the bar as a menu, dismissed by Escape / outside.
   const onContextMenu = (e: React.MouseEvent) => {
-    if (!showActions) return;
+    if (!actions) return;
     e.preventDefault();
     setBarMode("menu");
   };
@@ -182,11 +190,13 @@ export function PinCard({
   useEffect(() => () => clearPress(), []);
 
   // Impression tracking (migration 0016) — one shared observer for the whole feed.
+  // Owner-only: a visitor's impressions would stamp seen_at and drop items from the
+  // shared feed for everyone, so only the owner records them.
   useEffect(() => {
     const el = cardRef.current;
-    if (!el) return;
+    if (!el || !owner) return;
     return observeImpression(el, item.id);
-  }, [item.id]);
+  }, [item.id, owner]);
 
   // ── The spatial reflow ──────────────────────────────────────────────────────
   // Imperative, driven by MorphContext, so opening a tile never re-renders the
@@ -269,7 +279,8 @@ export function PinCard({
     // owns the URL from here (see DetailOverlay).
     e.preventDefault();
     if (cardRef.current) openMorph(item, cardRef.current.getBoundingClientRect());
-    logEngagement(item.id, "click");
+    // Owner-only signal (click ≈ interest); /api/events is proxy-gated for visitors.
+    if (owner) logEngagement(item.id, "click");
   };
 
   const dimNeighbours = barMode === "touch";
@@ -283,11 +294,11 @@ export function PinCard({
         touchAction: "manipulation",
         ...(dimNeighbours ? { position: "relative", zIndex: 50 } : null),
       }}
-      onContextMenu={showActions ? onContextMenu : undefined}
-      onPointerDown={showActions ? onPointerDown : undefined}
-      onPointerMove={showActions ? onPointerMove : undefined}
-      onPointerUp={showActions ? onPointerUp : undefined}
-      onPointerCancel={showActions ? onPointerCancel : undefined}
+      onContextMenu={actions ? onContextMenu : undefined}
+      onPointerDown={actions ? onPointerDown : undefined}
+      onPointerMove={actions ? onPointerMove : undefined}
+      onPointerUp={actions ? onPointerUp : undefined}
+      onPointerCancel={actions ? onPointerCancel : undefined}
     >
       {/* Dim the rest of the wall during a long-press so the pressed tile pops —
           "the other images shouldn't be too in focus". The pressed article is
@@ -371,8 +382,9 @@ export function PinCard({
         </div>
       </Link>
 
-      {/* Bottom action bar — sibling of the Link so its buttons never navigate. */}
-      {showActions && (
+      {/* Bottom action bar — sibling of the Link so its buttons never navigate.
+          Owner-only (`actions`), so visitors get a clean read-only tile. */}
+      {actions && (
         <TileActionBar
           itemId={item.id}
           caption={item.caption}

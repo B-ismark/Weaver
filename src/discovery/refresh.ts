@@ -38,19 +38,31 @@ export async function runDiscovery(source: CandidateSource): Promise<DiscoveryRe
   for (const c of pulled) if (!byUrl.has(c.imageUrl)) byUrl.set(c.imageUrl, c);
   const urls = [...byUrl.keys()];
 
-  // Batch small: image_url can be 300+ chars, and `.in()` encodes the whole slice
-  // into the GET query string — 200 URLs blew past PostgREST's URL-length limit, so
-  // the request errored, the error was swallowed, `existing` stayed empty, and every
-  // re-run re-embedded already-stored URLs (the unique index then dropped them at
-  // insert → "fresh N, stored 0"). 30 keeps the query well under the limit; a failed
-  // batch now throws instead of silently disabling dedup.
+  // Batch by a CHARACTER budget, not a fixed count: `.in()` packs the whole slice
+  // into the GET query string, and image_url length varies wildly — arena ~80 chars
+  // vs DeviantArt wixmp URLs ~750 chars (they carry a signed ~600-char JWT token). A
+  // fixed 30-URL slice of those long URLs overran the request-line limit → the fetch
+  // rejected with "TypeError: fetch failed" and dedup died. Cap each batch at ~6k
+  // chars of URLs (and ≤30 items) so the query stays well under the limit for both
+  // short and long URLs; a failed batch throws instead of silently disabling dedup.
+  const MAX_BATCH_CHARS = 6000;
   const existing = new Set<string>();
-  for (let i = 0; i < urls.length; i += 30) {
-    const slice = urls.slice(i, i + 30);
-    const { data, error } = await supabase.from("items").select("image_url").in("image_url", slice);
+  let batch: string[] = [];
+  let batchChars = 0;
+  const flush = async () => {
+    if (!batch.length) return;
+    const { data, error } = await supabase.from("items").select("image_url").in("image_url", batch);
     if (error) throw new Error(`existing-check failed: ${error.message}`);
     for (const r of data ?? []) existing.add(r.image_url);
+    batch = [];
+    batchChars = 0;
+  };
+  for (const u of urls) {
+    if (batch.length >= 30 || (batch.length && batchChars + u.length > MAX_BATCH_CHARS)) await flush();
+    batch.push(u);
+    batchChars += u.length;
   }
+  await flush();
   const fresh = [...byUrl.values()].filter((c) => !existing.has(c.imageUrl)).slice(0, EMBED_CAP);
 
   // 3. embed via the HF Space (also returns true dims, source-agnostic)

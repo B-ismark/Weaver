@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { FeedItem } from "@/lib/feed";
 import { MasonryFeed } from "./MasonryFeed";
 import { DiscoverButton } from "./DiscoverButton";
+import { useIsOwner } from "./OwnerProvider";
 
 /**
  * Infinite-scroll wrapper around the masonry grid.
@@ -85,6 +86,9 @@ export function InfiniteFeed({ initial }: { initial: FeedItem[] }) {
   const [done, setDone] = useState(initial.length < PAGE);
   const [error, setError] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  // Discovery is owner-only (/api/discover is proxy-gated); visitors just see the
+  // pool run out with a softer end-of-feed message.
+  const owner = useIsOwner();
 
   // The key that ties this component's snapshots to its history entry. Set once,
   // synchronously, in the restore layout effect below (before any save runs).
@@ -265,13 +269,15 @@ export function InfiniteFeed({ initial }: { initial: FeedItem[] }) {
         )}
         <output aria-live="polite" className="mt-2 text-sm text-muted">
           {done
-            ? "You've reached the end for now — pull in fresh discoveries."
+            ? owner
+              ? "You've reached the end for now — pull in fresh discoveries."
+              : "You've reached the end for now — check back soon for more."
             : error
               ? "Couldn't load more. Try again."
               : ""}
         </output>
-        {/* At the end of the pool, let the user trigger a fresh discovery sweep. */}
-        {done && <DiscoverButton />}
+        {/* At the end of the pool, let the OWNER trigger a fresh discovery sweep. */}
+        {done && owner && <DiscoverButton />}
       </div>
     </>
   );

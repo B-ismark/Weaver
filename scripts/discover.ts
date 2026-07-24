@@ -49,10 +49,19 @@ const SOURCES: Record<string, CandidateSource> = {
 };
 
 // Default sweep = the keyless / open sources (key-gated ones no-op without a key,
-// so including them is harmless; reddit/artstation are best-effort behind walls).
+// so including them is harmless). reddit is best-effort behind an IP wall: it reaches
+// fine from a residential IP (local `npm run discover` pulls it) and degrades to empty
+// from datacenter/CI unless DISCOVERY_PROXY_URL is set — worth the slot for its
+// concept-art subs, and its i.redd.it images embed from anywhere.
+//
+// artstation stays OUT: even when the JSON is pulled residentially, its cover CDN
+// (cdn*.artstation.com) 403s the embedder's datacenter fetch, so ~31/33 fail to embed
+// — a wall the residential pull can't move. Run it by name (`npm run discover --
+// artstation`) only with a DISCOVERY_PROXY_URL that also fronts the embed image fetch.
 const DEFAULT = [
   "arena",
   "openverse",
+  "reddit",
   "artic",
   "metmuseum",
   "wikimedia",

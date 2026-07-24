@@ -1,21 +1,24 @@
 import "server-only";
 import type { CandidateItem, CandidateSource } from "../types";
-import { fetchJsonResilient } from "../fetch";
+import { fetchTextResilient } from "../fetch";
 
 /**
- * Reddit discovery source via application-only OAuth (free).
+ * Reddit discovery source. Two paths, chosen at runtime:
  *
- * Reddit walled the unauthenticated `.json` endpoints (403 from servers), so we
- * authenticate app-only: POST client_credentials with the app's Basic auth to
- * get a bearer token, then read listings from oauth.reddit.com. Create a "web
- * app" at reddit.com/prefs/apps and set:
- *   REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET
- * Without creds we fall back to the resilient reader front on the public .json.
- * NOTE: Reddit also blocks Jina's IPs, so that free fallback only works when a
- * residential DISCOVERY_PROXY_URL is configured — OAuth creds remain the primary
- * path. Either way a total failure just yields an empty batch (other sources run).
+ *  1. AUTHED (preferred) — application-only OAuth. Create a "web app" at
+ *     reddit.com/prefs/apps and set REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET.
+ *     Reads listings from oauth.reddit.com (reliable from any IP, full-res
+ *     preview images, NSFW flag honored).
  *
- * Image posts only; hotlinks the preview (i.redd.it / preview.redd.it).
+ *  2. KEYLESS FALLBACK — when no creds are set. Reddit walled the unauthenticated
+ *     `.json` endpoints (403 with a block page), but the per-subreddit Atom feed
+ *     (/r/<sub>/.rss) still serves. Each entry embeds a preview <img> plus a
+ *     "[link]" anchor to the full-resolution i.redd.it original — we prefer the
+ *     latter. Routed through the resilient fetch ladder, so it works from a
+ *     residential dev IP now and can be unblocked in CI via DISCOVERY_PROXY_URL.
+ *     (Add real OAuth creds later and the source silently upgrades to path 1.)
+ *
+ * Image posts only; a total failure just yields an empty batch (other sources run).
  */
 const SUBREDDITS = [
   "photographs",
@@ -26,9 +29,20 @@ const SUBREDDITS = [
   "DesignPorn",
   "minimalism",
   "CozyPlaces",
+  // Concept art — ImaginaryNetwork + dedicated subs. The best free concept-art
+  // wells on Reddit: film/game keyframes, environment + character design, illos.
+  "ImaginaryLandscapes",
+  "ImaginaryCharacters",
+  "ImaginaryArchitecture",
+  "ImaginaryTechnology",
+  "conceptart",
+  "SpecArt",
 ];
 const PER_SUB = 25;
 const UA = "web:weaver-personal-aggregator:v0.2 (discovery)";
+// Reddit's Atom feed 403s the bot UA but serves a browser one.
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
 
 let cachedToken: { token: string; exp: number } | null = null;
 
@@ -55,6 +69,8 @@ async function getToken(now: number): Promise<string | null> {
   return j.access_token;
 }
 
+// ── Authed path (oauth.reddit.com) ──────────────────────────────────────────
+
 type RedditChild = {
   data: {
     title: string;
@@ -66,41 +82,37 @@ type RedditChild = {
   };
 };
 
-function decode(s: string): string {
-  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'");
-}
-
 type Listing = { data?: { children?: RedditChild[] } };
 
-async function fetchListing(sub: string, token: string | null): Promise<Listing | null> {
-  // With app creds: authenticated read from oauth.reddit.com (reliable).
-  if (token) {
-    const res = await fetch(`https://oauth.reddit.com/r/${sub}/hot?limit=${PER_SUB}&raw_json=1`, {
-      headers: { Authorization: `Bearer ${token}`, "User-Agent": UA },
-      signal: AbortSignal.timeout(20_000),
-    }).catch(() => null);
-    if (res?.ok) return (await res.json().catch(() => null)) as Listing | null;
-  }
-  // No creds (or auth failed): the public .json is walled from datacenter IPs, so
-  // escalate through the proxy/reader front to still pull a token-free batch.
-  return fetchJsonResilient<Listing>(
-    `https://www.reddit.com/r/${sub}/hot.json?limit=${PER_SUB}&raw_json=1`,
-    { headers: { "User-Agent": UA } }
-  );
+function decode(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0*39;|&apos;/g, "'")
+    .replace(/&#(\d+);/g, (m, d) => {
+      const n = parseInt(d, 10);
+      return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : m;
+    });
 }
 
-async function pullSubreddit(sub: string, token: string | null): Promise<CandidateItem[]> {
-  const json = await fetchListing(sub, token);
+async function pullSubredditAuthed(sub: string, token: string): Promise<CandidateItem[]> {
+  const res = await fetch(`https://oauth.reddit.com/r/${sub}/hot?limit=${PER_SUB}&raw_json=1`, {
+    headers: { Authorization: `Bearer ${token}`, "User-Agent": UA },
+    signal: AbortSignal.timeout(20_000),
+  }).catch(() => null);
+  if (!res?.ok) return [];
+  const json = (await res.json().catch(() => null)) as Listing | null;
   if (!json) return [];
-  const out: CandidateItem[] = [];
 
+  const out: CandidateItem[] = [];
   for (const { data: p } of json.data?.children ?? []) {
-    if (p.over_18 || p.is_video || p.is_gallery) continue; // images only (§3)
+    if (p.over_18 || p.is_video || p.is_gallery) continue; // images only
     const preview = p.preview?.images?.[0]?.source;
     if (!preview) continue;
     const url = decode(preview.url);
     if (!/\.(jpg|jpeg|png|webp)/i.test(url)) continue;
-
     out.push({
       imageUrl: url,
       sourceLink: `https://www.reddit.com${p.permalink}`,
@@ -113,14 +125,49 @@ async function pullSubreddit(sub: string, token: string | null): Promise<Candida
   return out;
 }
 
+// ── Keyless path (/r/<sub>/.rss) ─────────────────────────────────────────────
+
+const IREDDIT = /href="(https:\/\/i\.redd\.it\/[^"]+\.(?:jpe?g|png|webp))"/i;
+const PREVIEW_IMG = /<img\b[^>]*\bsrc="(https:\/\/preview\.redd\.it\/[^"]+)"/i;
+
+async function pullSubredditRss(sub: string): Promise<CandidateItem[]> {
+  const xml = await fetchTextResilient(`https://www.reddit.com/r/${sub}/hot/.rss?limit=${PER_SUB}`, {
+    headers: {
+      "User-Agent": BROWSER_UA,
+      Accept: "application/atom+xml, application/xml, text/xml, */*",
+    },
+  });
+  if (!xml) return [];
+
+  const out: CandidateItem[] = [];
+  for (const entry of xml.match(/<entry\b[\s\S]*?<\/entry>/gi) ?? []) {
+    // The <content> HTML is entity-encoded; decode so hrefs/imgs are matchable.
+    const html = decode(entry);
+    // Prefer the full-resolution original over the cropped preview thumbnail.
+    const url = IREDDIT.exec(html)?.[1] ?? PREVIEW_IMG.exec(html)?.[1];
+    if (!url) continue; // no image (self/text/external post) → skip
+    const title = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(entry)?.[1] ?? "";
+    const link = /<link\b[^>]*\bhref="([^"]+)"/i.exec(entry)?.[1];
+    out.push({
+      imageUrl: url,
+      sourceLink: link ?? url,
+      caption: decode(title.replace(/<!\[CDATA\[|\]\]>/g, "")).trim().slice(0, 300),
+      source: "reddit",
+    });
+  }
+  return out;
+}
+
 export const redditSource: CandidateSource = {
   name: "reddit",
   async pull(): Promise<CandidateItem[]> {
-    // token may be null (creds unset / auth failed) → pullSubreddit falls back to
-    // the resilient reader front instead of yielding nothing.
     const token = await getToken(Date.now());
+    // Authed when creds are present, keyless Atom fallback otherwise.
+    const pullOne = token
+      ? (s: string) => pullSubredditAuthed(s, token)
+      : (s: string) => pullSubredditRss(s);
     const batches = await Promise.all(
-      SUBREDDITS.map((s) => pullSubreddit(s, token).catch(() => [] as CandidateItem[]))
+      SUBREDDITS.map((s) => pullOne(s).catch(() => [] as CandidateItem[]))
     );
     return batches.flat();
   },
