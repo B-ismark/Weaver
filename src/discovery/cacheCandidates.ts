@@ -1,6 +1,6 @@
 import "server-only";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { cacheImageVariants } from "@/lib/imageCache";
+import { cacheImageVariants, THUMBNAIL_BUCKET, THUMBNAIL_VARIANT } from "@/lib/imageCache";
 
 /**
  * Discovery candidate thumbnail cache (image-cache plan, Phase 1).
@@ -15,11 +15,19 @@ import { cacheImageVariants } from "@/lib/imageCache";
  * thumb_url points at our storage, imageHost.shouldOptimize treats it as
  * optimizable automatically — no component changes needed.
  *
+ * Not filtered by role: a candidate can be liked (→ promoted, role flips to
+ * 'taste') before this sweep ever reaches it, and those are exactly the rows
+ * that most need caching, since they're kept indefinitely as the taste-training
+ * signal (see evictCandidates.ts). thumb_cached is what actually tracks
+ * whether a row needs this, independent of role.
+ *
+ * Oldest-uncached-first, matching evictStaleCandidates' oldest-first order:
+ * a backlog should drain the rows closest to their retention cutoff first, so
+ * an aging candidate doesn't get evicted having never been cached.
+ *
  * A failing row (dead URL, source now blocking us) backs off via
  * thumb_cache_attempts instead of being retried forever.
  */
-const BUCKET = "thumbnails";
-const THUMB = { suffix: "thumb", width: 400, quality: 78 };
 const MAX_ATTEMPTS = 3;
 
 export interface CacheFillReport {
@@ -34,11 +42,10 @@ export async function cacheCandidateThumbnails(batchSize = 100): Promise<CacheFi
   const { data: rows, error } = await supabase
     .from("items")
     .select("id, image_url, platform")
-    .eq("role", "candidate")
     .eq("thumb_cached", false)
     .eq("hidden", false)
     .lt("thumb_cache_attempts", MAX_ATTEMPTS)
-    .order("created_at", { ascending: false })
+    .order("created_at", { ascending: true })
     .limit(batchSize);
   if (error) throw new Error(`cache-fill query failed: ${error.message}`);
 
@@ -47,11 +54,11 @@ export async function cacheCandidateThumbnails(batchSize = 100): Promise<CacheFi
 
   for (const row of rows ?? []) {
     try {
-      const variants = await cacheImageVariants(row.image_url, [THUMB], {
-        bucket: BUCKET,
+      const variants = await cacheImageVariants(row.image_url, [THUMBNAIL_VARIANT], {
+        bucket: THUMBNAIL_BUCKET,
         pathPrefix: row.platform,
       });
-      const thumb = variants[THUMB.suffix];
+      const thumb = variants[THUMBNAIL_VARIANT.suffix];
 
       const { error: updateErr } = await supabase
         .from("items")
@@ -70,7 +77,15 @@ export async function cacheCandidateThumbnails(batchSize = 100): Promise<CacheFi
       const message = err instanceof Error ? err.message : String(err);
       // Bumps attempts atomically so a batch that hits the same dead row twice
       // (two sweeps before the attempt cap trips) can't race on a read-modify-write.
-      await supabase.rpc("bump_thumb_cache_failure", { item_id: row.id, err: message });
+      const { error: bumpErr } = await supabase.rpc("bump_thumb_cache_failure", {
+        item_id: row.id,
+        err: message,
+      });
+      if (bumpErr) {
+        // Bookkeeping itself failed — log so it's visible in the Actions run,
+        // rather than silently never backing off this row.
+        console.error(`bump_thumb_cache_failure failed for ${row.id}: ${bumpErr.message}`);
+      }
     }
   }
 

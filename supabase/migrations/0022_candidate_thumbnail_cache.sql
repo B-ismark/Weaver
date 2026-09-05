@@ -21,10 +21,12 @@ alter table items add column if not exists thumb_cache_error text;
 update items set thumb_cached = true
 where thumb_url like '%.supabase.co%' and not thumb_cached;
 
--- The fill sweep's query: pending candidates, oldest first, capped attempts.
+-- The fill sweep's query: pending rows (any role — a candidate can be liked and
+-- promoted to role='taste' before it's ever cached, and those rows still need
+-- caching), oldest first, capped attempts.
 create index if not exists items_thumb_cache_pending_idx
   on items (created_at)
-  where role = 'candidate' and not thumb_cached and not hidden;
+  where not thumb_cached and not hidden;
 
 -- Bump attempts/error atomically (avoids a read-modify-write race with the sweep
 -- running as a simple loop over a batch).

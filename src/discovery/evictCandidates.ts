@@ -45,25 +45,35 @@ export async function evictStaleCandidates(): Promise<EvictReport> {
   if (error) throw new Error(`eviction query failed: ${error.message}`);
   if (!victims?.length) return { deletedRows: 0, deletedObjects: 0 };
 
+  const ids = victims.map((v) => v.id);
+
   // One refcount check per victim (small batches, off-Vercel cron — see
   // .github/workflows/discover.yml — so no time-budget pressure to optimize
-  // this into a single query).
+  // this into a single query). Excludes the rest of THIS batch from the count:
+  // two victims being deleted together can share a content-addressed
+  // thumb_url (e.g. the same image reposted to two sources), and counting
+  // each other as a live reference would leave the object orphaned in
+  // storage forever, since no row will exist afterward to catch it on a
+  // later sweep.
   const orphanUrls: string[] = [];
   for (const v of victims) {
     if (!v.thumb_url) continue;
     const { count, error: countErr } = await supabase
       .from("items")
       .select("id", { count: "exact", head: true })
-      .eq("thumb_url", v.thumb_url);
+      .eq("thumb_url", v.thumb_url)
+      .not("id", "in", `(${ids.join(",")})`);
     if (countErr) throw new Error(`refcount check failed: ${countErr.message}`);
-    if ((count ?? 0) <= 1) orphanUrls.push(v.thumb_url);
+    if ((count ?? 0) === 0) orphanUrls.push(v.thumb_url);
   }
-
-  const ids = victims.map((v) => v.id);
   const { error: delErr } = await supabase.from("items").delete().in("id", ids);
   if (delErr) throw new Error(`eviction delete failed: ${delErr.message}`);
 
-  const paths = orphanUrls.map(storagePathFromPublicUrl).filter((p): p is string => p !== null);
+  // Dedupe: two victims can share the same orphaned thumb_url (see above),
+  // which would otherwise queue the same storage path for removal twice.
+  const paths = [...new Set(orphanUrls)]
+    .map(storagePathFromPublicUrl)
+    .filter((p): p is string => p !== null);
 
   let deletedObjects = 0;
   if (paths.length) {

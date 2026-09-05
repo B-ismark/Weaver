@@ -1,7 +1,7 @@
 import "server-only";
 import type { ThumbnailCachePort } from "../pipeline";
 import type { NormalizedItem } from "../types";
-import { cacheImageVariants } from "@/lib/imageCache";
+import { cacheImageVariants, THUMBNAIL_BUCKET, THUMBNAIL_VARIANT } from "@/lib/imageCache";
 
 /**
  * ThumbnailCachePort (§5.1): fetch the source image once, downscale to ~400px
@@ -12,19 +12,16 @@ import { cacheImageVariants } from "@/lib/imageCache";
  *
  * The actual fetch/resize/upload lives in src/lib/imageCache.ts, shared with
  * the discovery candidate cache (src/discovery/cacheCandidates.ts) — this
- * adapter just supplies the one "thumb" variant this pipeline needs and keeps
- * the pHash-friendly raw bytes.
+ * adapter just supplies the shared "thumb" variant and keeps the pHash-friendly
+ * raw bytes.
  */
-const BUCKET = "thumbnails";
-const THUMB = { suffix: "thumb", width: 400, quality: 78 };
-
 export const sharpThumbnailCache: ThumbnailCachePort = {
   async cache(item: NormalizedItem) {
-    const variants = await cacheImageVariants(item.imageUrl, [THUMB], {
-      bucket: BUCKET,
+    const variants = await cacheImageVariants(item.imageUrl, [THUMBNAIL_VARIANT], {
+      bucket: THUMBNAIL_BUCKET,
       pathPrefix: item.platform,
     });
-    const thumb = variants[THUMB.suffix];
+    const thumb = variants[THUMBNAIL_VARIANT.suffix];
     return { thumbUrl: thumb.url, thumbBytes: thumb.bytes, width: thumb.width, height: thumb.height };
   },
 };

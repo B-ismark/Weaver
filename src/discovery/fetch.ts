@@ -1,4 +1,5 @@
 import "server-only";
+import { getProxyDispatcher } from "@/lib/proxyDispatcher";
 
 /**
  * Escalating fetch for discovery sources (Agent-Reach idea, portable to Vercel).
@@ -24,7 +25,6 @@ import "server-only";
  * batch rather than crashing the whole discovery run.
  */
 
-const PROXY = process.env.DISCOVERY_PROXY_URL || "";
 // Jina front is on by default (no key required); set DISCOVERY_USE_JINA=0 to disable.
 const JINA_ENABLED = process.env.DISCOVERY_USE_JINA !== "0";
 const JINA_KEY = process.env.JINA_API_KEY || "";
@@ -36,19 +36,6 @@ export interface DiscoveryFetchOpts {
   timeoutMs?: number;
   /** Allow the r.jina.ai reader fallback for this call (default true). */
   viaJina?: boolean;
-}
-
-// Lazily build one ProxyAgent and reuse it (connection pooling). Imported
-// dynamically so the module still loads when no proxy is configured.
-let proxyDispatcherPromise: Promise<unknown> | null = null;
-async function getProxyDispatcher(): Promise<unknown> {
-  if (!PROXY) return null;
-  if (!proxyDispatcherPromise) {
-    proxyDispatcherPromise = import("undici")
-      .then(({ ProxyAgent }) => new ProxyAgent(PROXY))
-      .catch(() => null); // undici missing → skip proxy leg gracefully
-  }
-  return proxyDispatcherPromise;
 }
 
 function isBlocked(status: number): boolean {

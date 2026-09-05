@@ -2,6 +2,7 @@ import "server-only";
 import sharp from "sharp";
 import { createHash } from "node:crypto";
 import { getServerSupabase } from "@/lib/supabase/server";
+import { getProxyDispatcher } from "@/lib/proxyDispatcher";
 
 /**
  * Shared fetch → resize → upload primitive behind BOTH the import pipeline's
@@ -29,17 +30,14 @@ export interface CachedVariant {
   bytes: Uint8Array;
 }
 
-let proxyDispatcherPromise: Promise<unknown> | null = null;
-async function getProxyDispatcher(): Promise<unknown> {
-  const proxy = process.env.DISCOVERY_PROXY_URL || "";
-  if (!proxy) return null;
-  if (!proxyDispatcherPromise) {
-    proxyDispatcherPromise = import("undici")
-      .then(({ ProxyAgent }) => new ProxyAgent(proxy))
-      .catch(() => null);
-  }
-  return proxyDispatcherPromise;
-}
+/**
+ * The single shared bucket + thumbnail spec both caching paths (the import
+ * pipeline's sharpThumbnail.ts and discovery's cacheCandidates.ts) write to —
+ * kept in one place so the two callers can never drift into producing
+ * differently-sized "thumb" variants under the same suffix.
+ */
+export const THUMBNAIL_BUCKET = "thumbnails";
+export const THUMBNAIL_VARIANT: ImageVariantSpec = { suffix: "thumb", width: 400, quality: 78 };
 
 /**
  * Fetch source bytes with a browser UA (some CDNs, e.g. Pinterest, reject the
