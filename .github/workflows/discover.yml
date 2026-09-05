@@ -73,6 +73,20 @@ jobs:
         # Sweep the open sources; each is isolated (a failure is logged, not fatal).
         run: npm run discover -- arena openverse reddit artic metmuseum wikimedia cleveland nasa europeana smithsonian rss
 
+      - name: Cache candidate thumbnails + evict stale un-liked candidates
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          DISCOVERY_PROXY_URL: ${{ secrets.DISCOVERY_PROXY_URL }}
+          # How many un-cached candidates to fetch+resize+upload per tick.
+          CACHE_FILL_BATCH: "200"
+          # How long an un-liked candidate survives before its row (and, once
+          # unreferenced, its cached image) is deleted. Liked items are promoted
+          # to role='taste' and are never touched by this — they're the training
+          # signal and are kept indefinitely.
+          CANDIDATE_RETENTION_DAYS: "14"
+        run: npm run cache-images
+
       - name: Sync Pinterest saved pins (taste signal)
         run: |
           code=$(curl -sSL -o /tmp/sync.json -w "%{http_code}" -X POST "${APP_URL%/}/api/pinterest/sync" \

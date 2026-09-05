@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "discover": "node --conditions=react-server --import tsx scripts/discover.ts",
+    "cache-images": "node --conditions=react-server --import tsx scripts/cache-images.ts",
     "ingest:gallerydl": "node --conditions=react-server --import tsx scripts/gallerydl-ingest.ts"
   },
   "dependencies": {
