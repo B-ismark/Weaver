@@ -1,6 +1,7 @@
 import "server-only";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { cacheImageVariants, THUMBNAIL_BUCKET, THUMBNAIL_VARIANT } from "@/lib/imageCache";
+import { SchemaNotReadyError, isSchemaNotReady } from "@/lib/schemaNotReady";
 
 /**
  * Discovery candidate thumbnail cache (image-cache plan, Phase 1).
@@ -47,7 +48,14 @@ export async function cacheCandidateThumbnails(batchSize = 100): Promise<CacheFi
     .lt("thumb_cache_attempts", MAX_ATTEMPTS)
     .order("created_at", { ascending: true })
     .limit(batchSize);
-  if (error) throw new Error(`cache-fill query failed: ${error.message}`);
+  if (error) {
+    if (isSchemaNotReady(error)) {
+      throw new SchemaNotReadyError(
+        `migration 0022_candidate_thumbnail_cache.sql hasn't been applied to this Supabase project yet (${error.message})`
+      );
+    }
+    throw new Error(`cache-fill query failed: ${error.message}`);
+  }
 
   let cached = 0;
   let failed = 0;
