@@ -12,6 +12,7 @@
 import "./_env"; // load .env.local for local runs (no-op in CI) — must be first
 import { cacheCandidateThumbnails } from "@/discovery/cacheCandidates";
 import { evictStaleCandidates } from "@/discovery/evictCandidates";
+import { SchemaNotReadyError } from "@/lib/schemaNotReady";
 
 async function main() {
   const fillBatch = Number(process.env.CACHE_FILL_BATCH) || 100;
@@ -24,6 +25,14 @@ async function main() {
 }
 
 main().catch((err) => {
+  if (err instanceof SchemaNotReadyError) {
+    // Don't fail the scheduled workflow run for this — it's a one-time setup
+    // step, not a bug, and would otherwise email a failure notice every tick
+    // until someone applies the migration.
+    console.warn(`⚠ ${err.message}`);
+    console.warn("Apply supabase/migrations/0022_candidate_thumbnail_cache.sql to this Supabase project (SQL editor, or `supabase db push`), then this step starts working on the next tick.");
+    process.exit(0);
+  }
   console.error(err);
   process.exit(1);
 });
